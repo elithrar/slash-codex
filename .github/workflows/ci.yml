@@ -26,4 +26,4 @@ jobs:
       - name: Check generated dist
         run: test -z "$(git status --porcelain dist)"
 
-      - uses: rhysd/actionlint@v1
+      - uses: raven-actions/actionlint@v2
