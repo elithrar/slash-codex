@@ -13,6 +13,7 @@ export type PromptInput = {
   canModify: boolean;
   canCreatePr: boolean;
   userPrompt: string;
+  customPrompt: string;
   triggerUrl: string;
   title: string;
   description: string;
@@ -74,6 +75,13 @@ Useful commands:
     repository: `${input.owner}/${input.repo}`,
     write_access_prompt: writeAccessPrompt.trim(),
     mode_prompt: modePrompt.trim(),
+    custom_prompt: input.customPrompt
+      ? `<custom_prompt_file>
+These repository-specific instructions were configured by the workflow maintainer. Apply them to every slash command unless they conflict with higher-priority guardrails.
+
+${input.customPrompt.trim()}
+</custom_prompt_file>`
+      : "",
     event_name: input.eventName,
     trigger_url: input.triggerUrl || "unknown",
     command: input.command,

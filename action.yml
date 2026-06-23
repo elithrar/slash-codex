@@ -32,6 +32,9 @@ inputs:
     description: "Comma-separated slash commands that trigger Codex."
     required: false
     default: "/codex,/review"
+  prompt_file:
+    description: "Repository path to extra prompt instructions injected into every Codex run. Read from the PR base/default branch."
+    required: false
   required-permission:
     description: "Minimum repository permission required to run: write, maintain, or admin."
     required: false
@@ -193,6 +196,8 @@ runs:
         USER_PROMPT: ${{ steps.context.outputs.user_prompt }}
         PR_NUMBER: ${{ steps.context.outputs.pr_number }}
         TRIGGER_URL: ${{ steps.context.outputs.trigger_url }}
+        PROMPT_FILE: ${{ inputs.prompt_file }}
+        PROMPT_FILE_REF: ${{ steps.context.outputs.base_ref }}
       run: node "${{ github.action_path }}/dist/prompt.js"
 
     - name: Pre-fetch PR refs

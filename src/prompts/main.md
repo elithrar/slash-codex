@@ -31,6 +31,8 @@ Response style:
 {{write_access_prompt}}
 
 {{mode_prompt}}
+
+{{custom_prompt}}
 </system_prompt>
 
 <repository_context>

@@ -47,6 +47,17 @@ Or ask for a review:
 /review focus on correctness and missing tests
 ```
 
+Add repository-specific instructions to every command with `prompt_file`:
+
+```yaml
+- uses: elithrar/slash-codex@main
+  with:
+    openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+    prompt_file: .github/slash-codex.md
+```
+
+`prompt_file` is read from the PR base branch or default branch, not from the checked-out PR branch.
+
 ## Providers
 
 Use direct OpenAI:
@@ -87,28 +98,29 @@ OpenCode Zen requests use `https://opencode.ai/zen/v1/responses`. Only Zen model
 
 ## Config
 
-| Input                      | Default               | Description                                                         |
-| -------------------------- | --------------------- | ------------------------------------------------------------------- |
-| `provider`                 | `auto`                | `auto`, `openai`, `cloudflare`, or `opencode`.                      |
-| `openai-api-key`           | empty                 | OpenAI API key. Prefer this over env passthrough.                   |
-| `cloudflare-api-key`       | empty                 | Cloudflare API token. Prefer this over env passthrough.             |
-| `cloudflare-account-id`    | empty                 | Cloudflare account ID. Prefer this over env passthrough.            |
-| `cloudflare-ai-gateway-id` | `default`             | Cloudflare AI Gateway ID or slug. Prefer this over env passthrough. |
-| `opencode-api-key`         | empty                 | OpenCode Zen API key. Prefer this over env passthrough.             |
-| `model`                    | `gpt-5.5`             | OpenAI-compatible Codex Responses model.                            |
-| `commands`                 | `/codex,/review`      | Comma-separated slash commands.                                     |
-| `required-permission`      | `write`               | Minimum actor permission: `write`, `maintain`, or `admin`.          |
-| `allow-forks`              | `false`               | Run on fork PRs in read-only mode. Defaults safe.                   |
-| `create-pr`                | `true`                | Allow standalone issue comments to create PRs.                      |
-| `push-pr-branch`           | `true`                | Allow same-repo PR comments to push commits.                        |
-| `commit-message`           | `apply codex changes` | Commit message for published changes.                               |
-| `branch-prefix`            | `codex`               | Branch prefix for issue-created PRs.                                |
-| `blocked-paths`            | built-in list         | Extra newline- or comma-separated blocked globs.                    |
-| `codex-version`            | empty                 | Optional Codex CLI version passed to `openai/codex-action`.         |
-| `codex-args`               | empty                 | Extra `codex exec` arguments.                                       |
-| `effort`                   | empty                 | Optional reasoning effort.                                          |
-| `safety-strategy`          | `drop-sudo`           | Passed to `openai/codex-action`.                                    |
-| `github-token`             | `github.token`        | Override token for API calls and publishing.                        |
+| Input                      | Default               | Description                                                                                                     |
+| -------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `provider`                 | `auto`                | `auto`, `openai`, `cloudflare`, or `opencode`.                                                                  |
+| `openai-api-key`           | empty                 | OpenAI API key. Prefer this over env passthrough.                                                               |
+| `cloudflare-api-key`       | empty                 | Cloudflare API token. Prefer this over env passthrough.                                                         |
+| `cloudflare-account-id`    | empty                 | Cloudflare account ID. Prefer this over env passthrough.                                                        |
+| `cloudflare-ai-gateway-id` | `default`             | Cloudflare AI Gateway ID or slug. Prefer this over env passthrough.                                             |
+| `opencode-api-key`         | empty                 | OpenCode Zen API key. Prefer this over env passthrough.                                                         |
+| `model`                    | `gpt-5.5`             | OpenAI-compatible Codex Responses model.                                                                        |
+| `commands`                 | `/codex,/review`      | Comma-separated slash commands.                                                                                 |
+| `prompt_file`              | empty                 | Repository path to extra prompt instructions injected into every command. Read from the PR base/default branch. |
+| `required-permission`      | `write`               | Minimum actor permission: `write`, `maintain`, or `admin`.                                                      |
+| `allow-forks`              | `false`               | Run on fork PRs in read-only mode. Defaults safe.                                                               |
+| `create-pr`                | `true`                | Allow standalone issue comments to create PRs.                                                                  |
+| `push-pr-branch`           | `true`                | Allow same-repo PR comments to push commits.                                                                    |
+| `commit-message`           | `apply codex changes` | Commit message for published changes.                                                                           |
+| `branch-prefix`            | `codex`               | Branch prefix for issue-created PRs.                                                                            |
+| `blocked-paths`            | built-in list         | Extra newline- or comma-separated blocked globs.                                                                |
+| `codex-version`            | empty                 | Optional Codex CLI version passed to `openai/codex-action`.                                                     |
+| `codex-args`               | empty                 | Extra `codex exec` arguments.                                                                                   |
+| `effort`                   | empty                 | Optional reasoning effort.                                                                                      |
+| `safety-strategy`          | `drop-sudo`           | Passed to `openai/codex-action`.                                                                                |
+| `github-token`             | `github.token`        | Override token for API calls and publishing.                                                                    |
 
 Environment variable fallbacks:
 

@@ -14,6 +14,7 @@ const main = async () => {
   let baseRef = "";
   let baseSha = "";
   let headSha = "";
+  let customPrompt = "";
 
   if (prNumber) {
     const { data: pr } = await octokit.rest.pulls.get({
@@ -34,6 +35,23 @@ const main = async () => {
     description = issue.body || "";
   }
 
+  const promptFile = process.env.PROMPT_FILE || "";
+  if (promptFile) {
+    const ref = process.env.PROMPT_FILE_REF || "";
+    const { data } = await octokit.rest.repos.getContent({
+      ...repo,
+      path: promptFile,
+      ...(ref ? { ref } : {}),
+    });
+    if (Array.isArray(data) || data.type !== "file") {
+      throw new Error(`prompt_file must point to a file: ${promptFile}`);
+    }
+    if (data.encoding !== "base64" || !data.content) {
+      throw new Error(`prompt_file could not be decoded as base64: ${promptFile}`);
+    }
+    customPrompt = Buffer.from(data.content, "base64").toString("utf8");
+  }
+
   const comment = payload.comment;
   const prompt = buildPrompt({
     owner: repo.owner,
@@ -43,6 +61,7 @@ const main = async () => {
     canModify: process.env.CAN_MODIFY === "true",
     canCreatePr: process.env.CAN_CREATE_PR === "true",
     userPrompt: process.env.USER_PROMPT || "",
+    customPrompt,
     triggerUrl: process.env.TRIGGER_URL || "",
     title,
     description,
