@@ -2,61 +2,43 @@ import { describe, expect, it } from "vitest";
 import { buildPullRequestBody } from "../src/publish-core.js";
 
 describe("buildPullRequestBody", () => {
-  it("summarizes major changes and why from Codex output", () => {
+  it("uses Codex's final message as the PR body", () => {
     const body = buildPullRequestBody({
       issueNumber: "1",
       request: "do a review of the README and open a PR with improvements",
-      finalMessage: `Updated README.md with:
+      finalMessage: `Updated README.md with clearer setup and safety docs.
 
-- Clearer Quick Start setup and trigger examples.
-- Notes on internal checkout behavior, issue-created PRs, and PR branch pushes.
-- A dedicated repository instructions section.
-- Provider auto-selection behavior.
-- Outputs documentation.
-- Expanded safety notes and a blocked-paths example.
+- Clarified Quick Start triggers so maintainers can invoke Codex predictably.
+- Added provider setup notes because the required secrets differ by backend.
+- Documented blocked paths so users understand why sensitive changes are not published.
 
 Verification:
 - git diff --check passes.
-- npm run format could not run because oxfmt was missing.
 
-I did not open a PR directly.`,
+I did not open a PR directly; the runner should package this change.`,
     });
 
     expect(body).toBe(`Generated from #1.
 
-Why:
-- Requested: do a review of the README and open a PR with improvements
+Updated README.md with clearer setup and safety docs.
 
-Major changes:
-- Clearer Quick Start setup and trigger examples.
-- Notes on internal checkout behavior, issue-created PRs, and PR branch pushes.
-- A dedicated repository instructions section.
-- Provider auto-selection behavior.
-- Outputs documentation.
-- Expanded safety notes and a blocked-paths example.
+- Clarified Quick Start triggers so maintainers can invoke Codex predictably.
+- Added provider setup notes because the required secrets differ by backend.
+- Documented blocked paths so users understand why sensitive changes are not published.
 
 Verification:
-- git diff --check passes.
-- npm run format could not run because oxfmt was missing.`);
+- git diff --check passes.`);
   });
 
-  it("falls back to the first useful sentence when no change bullets are present", () => {
+  it("falls back to the request when Codex returns no summary", () => {
     expect(
       buildPullRequestBody({
         issueNumber: "7",
-        request: "",
-        finalMessage:
-          "Updated README.md with clearer provider docs.\n\nVerification:\n- Tests passed.",
+        request: "update the README examples",
+        finalMessage: "",
       }),
     ).toBe(`Generated from #7.
 
-Why:
-- Addresses the Codex request from #7.
-
-Major changes:
-- Updated README.md with clearer provider docs.
-
-Verification:
-- Tests passed.`);
+Requested: update the README examples`);
   });
 });

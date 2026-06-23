@@ -23925,72 +23925,21 @@ var stringOutput = (name, value) => {
 };
 
 // src/publish-core.ts
-var bulletPattern = /^\s*[-*]\s+(.+)$/;
-var sectionFor = (line) => line.trim().toLowerCase().replace(/:$/, "");
-var cleanBullet = (value) => value.trim().replace(/\s+/g, " ");
-var isWantedSection = (section, wantedSections) => wantedSections.has(section) || wantedSections.has("with") && section.endsWith(" with");
-var collectBullets = (message, wantedSections, max = 6) => {
-  const bullets = [];
-  let currentSection = "";
-  for (const line of message.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      continue;
-    }
-    if (!bulletPattern.test(trimmed) && trimmed.length <= 80) {
-      currentSection = sectionFor(trimmed);
-      continue;
-    }
-    const match = trimmed.match(bulletPattern);
-    if (!match || !isWantedSection(currentSection, wantedSections)) {
-      continue;
-    }
-    bullets.push(cleanBullet(match[1] || ""));
-    if (bullets.length >= max) {
-      break;
-    }
-  }
-  return bullets;
-};
-var firstUsefulSentence = (message) => {
-  for (const line of message.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("---") || bulletPattern.test(trimmed)) {
-      continue;
-    }
-    if (/^(verification|i did not|codex )/i.test(trimmed)) {
-      continue;
-    }
-    return trimmed;
-  }
-  return "Codex generated changes.";
-};
+var wrapperNoise = [
+  /^i did not (open|create) a pr\b/i,
+  /^per the workflow constraints\b/i,
+  /^the runner should package\b/i,
+  /^the github actions wrapper is expected\b/i
+];
+var cleanedFinalMessage = (message) => message.split(/\r?\n/).filter((line) => !wrapperNoise.some((pattern) => pattern.test(line.trim()))).join("\n").trim();
 var buildPullRequestBody = ({
   issueNumber,
   request: request2,
   finalMessage
 }) => {
-  const changes = collectBullets(
-    finalMessage,
-    /* @__PURE__ */ new Set(["with", "updated", "changes", "major changes", "summary"])
-  );
-  const verification = collectBullets(finalMessage, /* @__PURE__ */ new Set(["verification"]), 3);
-  const body = [`Generated from #${issueNumber}.`, ""];
-  body.push("Why:");
-  body.push(
-    request2 ? `- Requested: ${request2}` : `- Addresses the Codex request from #${issueNumber}.`
-  );
-  body.push("");
-  body.push("Major changes:");
-  if (changes.length > 0) {
-    body.push(...changes.map((change) => `- ${change}`));
-  } else {
-    body.push(`- ${firstUsefulSentence(finalMessage)}`);
-  }
-  if (verification.length > 0) {
-    body.push("", "Verification:", ...verification.map((item) => `- ${item}`));
-  }
-  return body.join("\n");
+  const summary2 = cleanedFinalMessage(finalMessage);
+  const fallback = request2 ? `Requested: ${request2}` : `Codex generated changes for #${issueNumber}.`;
+  return [`Generated from #${issueNumber}.`, "", summary2 || fallback].join("\n");
 };
 
 // src/publish.ts

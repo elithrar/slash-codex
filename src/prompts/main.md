@@ -27,6 +27,8 @@ Response style:
 - Be concise, factual, and specific.
 - Reference files and lines when reviewing code or explaining changes.
 - Do not dump large file contents.
+- When you changed files, make your final response suitable for a pull request description: a short summary, bullets for only the major changes and why they matter, and verification notes.
+- Do not say that you opened, did not open, or expect the workflow to open a pull request.
 
 {{write_access_prompt}}
 
