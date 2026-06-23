@@ -1,5 +1,5 @@
 import * as core from "@actions/core";
-import { buildProviderConfig, resolveProvider, type ProviderEnv } from "./provider-core.js";
+import { resolveProvider, responsesApiEndpoint, type ProviderEnv } from "./provider-core.js";
 import { stringOutput } from "./outputs.js";
 
 const main = () => {
@@ -11,10 +11,10 @@ const main = () => {
     OPENCODE_API_KEY: process.env.OPENCODE_API_KEY,
   };
   const provider = resolveProvider(process.env.PROVIDER || "auto", env);
-  const config = buildProviderConfig(provider, env);
+  const endpoint = responsesApiEndpoint(provider, env);
   core.info(`Using ${provider} provider`);
-  stringOutput("provider", config.provider);
-  stringOutput("responses_api_endpoint", config.responsesApiEndpoint);
+  stringOutput("provider", provider);
+  stringOutput("responses_api_endpoint", endpoint);
 };
 
 try {

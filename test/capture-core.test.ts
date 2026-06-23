@@ -8,10 +8,17 @@ describe("blockedPaths", () => {
         ".github/workflows/ci.yml",
         "action.yml",
         ".env.local",
+        "private.pem",
         "secrets/private.pem",
         "src/app.ts",
       ]),
-    ).toEqual([".github/workflows/ci.yml", "action.yml", ".env.local", "secrets/private.pem"]);
+    ).toEqual([
+      ".github/workflows/ci.yml",
+      "action.yml",
+      ".env.local",
+      "private.pem",
+      "secrets/private.pem",
+    ]);
   });
 
   test("supports caller-provided blocked globs", () => {

@@ -66,6 +66,8 @@ describe("resolveTrigger", () => {
 
     expect(result.canRun).toBe(true);
     expect(result.canCreatePr).toBe(true);
+    expect(result.skipped).toBe(false);
+    expect(result.skipReason).toBe("");
     expect(result.targetIssueNumber).toBe("12");
   });
 
@@ -93,46 +95,70 @@ describe("resolveTrigger", () => {
 
     expect(result.canRun).toBe(true);
     expect(result.canModify).toBe(true);
+    expect(result.skipped).toBe(false);
+    expect(result.skipReason).toBe("");
     expect(result.reviewCommentId).toBe("100");
   });
 
   test("skips bots, unauthorized users, and forks by default", () => {
-    expect(
-      resolveTrigger({
-        eventName: "issue_comment",
-        payload: { ...issueCommentPayload, sender: { login: "bot", type: "Bot" } },
-        options,
-        actorPermission: "admin",
-        pullRequest: null,
-        repositoryFullName: "o/r",
-      }).canRun,
-    ).toBe(false);
+    const botResult = resolveTrigger({
+      eventName: "issue_comment",
+      payload: { ...issueCommentPayload, sender: { login: "bot", type: "Bot" } },
+      options,
+      actorPermission: "admin",
+      pullRequest: null,
+      repositoryFullName: "o/r",
+    });
+    expect(botResult.canRun).toBe(false);
+    expect(botResult.isValid).toBe(true);
+    expect(botResult.skipped).toBe(true);
+    expect(botResult.skipReason).toBe("bot sender");
 
-    expect(
-      resolveTrigger({
-        eventName: "issue_comment",
-        payload: issueCommentPayload,
-        options,
-        actorPermission: "read",
-        pullRequest: null,
-        repositoryFullName: "o/r",
-      }).canRun,
-    ).toBe(false);
+    const permissionResult = resolveTrigger({
+      eventName: "issue_comment",
+      payload: issueCommentPayload,
+      options,
+      actorPermission: "read",
+      pullRequest: null,
+      repositoryFullName: "o/r",
+    });
+    expect(permissionResult.canRun).toBe(false);
+    expect(permissionResult.isValid).toBe(true);
+    expect(permissionResult.skipped).toBe(true);
+    expect(permissionResult.skipReason).toBe("insufficient permission: read");
 
-    expect(
-      resolveTrigger({
-        eventName: "pull_request_review_comment",
-        payload: {
-          sender: { login: "matt", type: "User" },
-          repository: { default_branch: "main" },
-          pull_request: { number: 42 },
-          comment: { body: "/codex ok", id: 1 },
-        },
-        options,
-        actorPermission: "admin",
-        pullRequest: { ...pr, headRepo: "fork/r" },
-        repositoryFullName: "o/r",
-      }).canRun,
-    ).toBe(false);
+    const forkResult = resolveTrigger({
+      eventName: "pull_request_review_comment",
+      payload: {
+        sender: { login: "matt", type: "User" },
+        repository: { default_branch: "main" },
+        pull_request: { number: 42 },
+        comment: { body: "/codex ok", id: 1 },
+      },
+      options,
+      actorPermission: "admin",
+      pullRequest: { ...pr, headRepo: "fork/r" },
+      repositoryFullName: "o/r",
+    });
+    expect(forkResult.canRun).toBe(false);
+    expect(forkResult.isValid).toBe(true);
+    expect(forkResult.skipped).toBe(true);
+    expect(forkResult.skipReason).toBe("fork pull request");
+  });
+
+  test("marks non-command comments invalid", () => {
+    const result = resolveTrigger({
+      eventName: "issue_comment",
+      payload: { ...issueCommentPayload, comment: { body: "please fix it" } },
+      options,
+      actorPermission: "write",
+      pullRequest: null,
+      repositoryFullName: "o/r",
+    });
+
+    expect(result.isValid).toBe(false);
+    expect(result.canRun).toBe(false);
+    expect(result.skipped).toBe(true);
+    expect(result.skipReason).toBe("no slash command");
   });
 });

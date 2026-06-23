@@ -3,17 +3,11 @@ export const DEFAULT_BLOCKED_PATTERNS = [
   ".github/scripts/codex/**",
   "action.yml",
   "action.yaml",
-  ".env",
-  ".env.*",
   "**/.env",
   "**/.env.*",
-  "*.pem",
   "**/*.pem",
-  "*.key",
   "**/*.key",
-  "*.p12",
   "**/*.p12",
-  "*.pfx",
   "**/*.pfx",
 ];
 

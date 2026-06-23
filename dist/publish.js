@@ -23979,40 +23979,42 @@ var main = async () => {
   }
   configureGit();
   const commitMessage = process.env.COMMIT_MESSAGE || "apply codex changes";
+  let destinationRef = "";
+  let issueNumber = "";
+  let baseRef = "";
+  let body = "";
   if (process.env.CAN_MODIFY === "true") {
-    const headRef = required("HEAD_REF");
-    run("git", ["commit", "-m", commitMessage]);
-    run("git", ["push", "origin", `HEAD:${headRef}`]);
-    boolOutput("changed", true);
-    return;
-  }
-  if (process.env.CAN_CREATE_PR === "true") {
-    const issueNumber = required("TARGET_ISSUE_NUMBER");
-    const baseRef = required("BASE_REF");
+    destinationRef = required("HEAD_REF");
+  } else if (process.env.CAN_CREATE_PR === "true") {
+    issueNumber = required("TARGET_ISSUE_NUMBER");
+    baseRef = required("BASE_REF");
     const prefix = (process.env.BRANCH_PREFIX || "codex").replace(/[^A-Za-z0-9._/-]/g, "-");
-    const branch = `${prefix}/issue-${issueNumber}-${github_exports.context.runId}-${github_exports.context.runAttempt}`;
-    const octokit = getOctokit2();
-    const repo = repoContext();
-    const body = buildPullRequestBody({
+    destinationRef = `${prefix}/issue-${issueNumber}-${github_exports.context.runId}-${github_exports.context.runAttempt}`;
+    body = buildPullRequestBody({
       issueNumber,
       request: process.env.USER_PROMPT || "",
       finalMessage: process.env.CODEX_FINAL_MESSAGE || ""
     });
-    run("git", ["switch", "-c", branch]);
-    run("git", ["commit", "-m", commitMessage]);
-    run("git", ["push", "origin", `HEAD:${branch}`]);
+    run("git", ["switch", "-c", destinationRef]);
+  } else {
+    boolOutput("changed", false);
+    return;
+  }
+  run("git", ["commit", "-m", commitMessage]);
+  run("git", ["push", "origin", `HEAD:${destinationRef}`]);
+  boolOutput("changed", true);
+  if (issueNumber) {
+    const octokit = getOctokit2();
+    const repo = repoContext();
     const { data: pr } = await octokit.rest.pulls.create({
       ...repo,
       base: baseRef,
-      head: branch,
+      head: destinationRef,
       title: `Codex changes for #${issueNumber}`,
       body
     });
-    boolOutput("changed", true);
     stringOutput("pr_url", pr.html_url);
-    return;
   }
-  boolOutput("changed", false);
 };
 await main().catch((error2) => {
   setFailed(error2 instanceof Error ? error2.message : String(error2));

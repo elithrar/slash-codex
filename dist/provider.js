@@ -19276,9 +19276,6 @@ var responsesApiEndpoint = (provider, env) => {
   }
   return "https://opencode.ai/zen/v1/responses";
 };
-var buildProviderConfig = (provider, env) => {
-  return { provider, responsesApiEndpoint: responsesApiEndpoint(provider, env) };
-};
 
 // src/outputs.ts
 var stringOutput = (name, value) => {
@@ -19295,10 +19292,10 @@ var main = () => {
     OPENCODE_API_KEY: process.env.OPENCODE_API_KEY
   };
   const provider = resolveProvider(process.env.PROVIDER || "auto", env);
-  const config = buildProviderConfig(provider, env);
+  const endpoint = responsesApiEndpoint(provider, env);
   info(`Using ${provider} provider`);
-  stringOutput("provider", config.provider);
-  stringOutput("responses_api_endpoint", config.responsesApiEndpoint);
+  stringOutput("provider", provider);
+  stringOutput("responses_api_endpoint", endpoint);
 };
 try {
   main();

@@ -20217,13 +20217,13 @@ var resolveTrigger = ({
   const isFork = Boolean(pullRequest?.headRepo && pullRequest.headRepo !== repositoryFullName);
   const hasRequiredPermission = hasPermission(actorPermission, options.requiredPermission);
   const blockedFork = isFork && !options.allowForks;
-  const canRun = Boolean(parsed) && !isBot && !unsupported && hasRequiredPermission && !blockedFork;
+  const skipReason = unsupported ? `unsupported event: ${eventName}` : isBot ? "bot sender" : !parsed ? "no slash command" : !hasRequiredPermission ? `insufficient permission: ${actorPermission}` : blockedFork ? "fork pull request" : "";
+  const canRun = skipReason === "";
+  const skipped = skipReason !== "";
   const canModify = Boolean(
     canRun && options.pushPrBranch && pullRequest && pullRequest.headRepo === repositoryFullName
   );
   const canCreatePr = Boolean(canRun && options.createPr && isStandaloneIssueComment);
-  const skipped = !parsed || isBot || unsupported || !canRun;
-  const skipReason = unsupported ? `unsupported event: ${eventName}` : isBot ? "bot sender" : !parsed ? "no slash command" : !hasRequiredPermission ? `insufficient permission: ${actorPermission}` : blockedFork ? "fork pull request" : "";
   return {
     isValid: Boolean(parsed),
     skipped,

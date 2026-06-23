@@ -112,7 +112,7 @@ runs:
       run: node "${{ github.action_path }}/dist/context.js"
 
     - name: React to trigger
-      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true'
+      if: steps.context.outputs.can_run == 'true'
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
@@ -120,7 +120,7 @@ runs:
       run: node "${{ github.action_path }}/dist/react.js"
 
     - name: Checkout writable PR branch
-      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true' && steps.context.outputs.can_modify == 'true'
+      if: steps.context.outputs.can_run == 'true' && steps.context.outputs.can_modify == 'true'
       uses: actions/checkout@v5
       with:
         ref: ${{ steps.context.outputs.head_ref }}
@@ -128,7 +128,7 @@ runs:
         persist-credentials: false
 
     - name: Checkout PR merge ref
-      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true' && steps.context.outputs.pr_number != '' && steps.context.outputs.can_modify != 'true'
+      if: steps.context.outputs.can_run == 'true' && steps.context.outputs.pr_number != '' && steps.context.outputs.can_modify != 'true'
       uses: actions/checkout@v5
       with:
         ref: refs/pull/${{ steps.context.outputs.pr_number }}/merge
@@ -136,7 +136,7 @@ runs:
         persist-credentials: false
 
     - name: Checkout default branch
-      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true' && steps.context.outputs.pr_number == ''
+      if: steps.context.outputs.can_run == 'true' && steps.context.outputs.pr_number == ''
       uses: actions/checkout@v5
       with:
         ref: ${{ steps.context.outputs.base_ref }}
@@ -144,7 +144,7 @@ runs:
         persist-credentials: false
 
     - name: Configure provider
-      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true'
+      if: steps.context.outputs.can_run == 'true'
       id: provider
       shell: bash
       env:
@@ -185,7 +185,7 @@ runs:
         echo "responses_api_endpoint=$(cat "$ENDPOINT_FILE")" >> "$GITHUB_OUTPUT"
 
     - name: Write Codex prompt
-      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true'
+      if: steps.context.outputs.can_run == 'true'
       id: prompt
       shell: bash
       env:
@@ -201,7 +201,7 @@ runs:
       run: node "${{ github.action_path }}/dist/prompt.js"
 
     - name: Pre-fetch PR refs
-      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true' && steps.context.outputs.pr_number != ''
+      if: steps.context.outputs.can_run == 'true' && steps.context.outputs.pr_number != ''
       shell: bash
       env:
         PR_BASE_REF: ${{ steps.prompt.outputs.base_ref }}
@@ -209,7 +209,7 @@ runs:
       run: git fetch --no-tags origin "$PR_BASE_REF" "+refs/pull/$PR_NUMBER/head"
 
     - name: Run Codex
-      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true'
+      if: steps.context.outputs.can_run == 'true'
       id: run-codex
       continue-on-error: true
       uses: openai/codex-action@v1
@@ -235,7 +235,7 @@ runs:
         codex-args: ${{ inputs.codex-args }}
 
     - name: Capture Codex changes
-      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true' && (steps.context.outputs.can_modify == 'true' || steps.context.outputs.can_create_pr == 'true') && steps.run-codex.outcome == 'success'
+      if: steps.context.outputs.can_run == 'true' && (steps.context.outputs.can_modify == 'true' || steps.context.outputs.can_create_pr == 'true') && steps.run-codex.outcome == 'success'
       id: patch
       shell: bash
       env:
@@ -260,7 +260,7 @@ runs:
       run: node "${{ github.action_path }}/dist/publish.js"
 
     - name: React to failure
-      if: always() && steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true' && (steps.run-codex.outcome != 'success' || steps.patch.outputs.blocked == 'true' || steps.publish.outcome == 'failure')
+      if: always() && steps.context.outputs.can_run == 'true' && (steps.run-codex.outcome != 'success' || steps.patch.outputs.blocked == 'true' || steps.publish.outcome == 'failure')
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
@@ -270,7 +270,7 @@ runs:
       run: node "${{ github.action_path }}/dist/react.js"
 
     - name: Post Codex feedback
-      if: always() && steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true' && (steps.run-codex.outputs.final-message != '' || steps.run-codex.outcome != 'success' || steps.patch.outputs.changed == 'true' || steps.patch.outputs.blocked == 'true')
+      if: always() && steps.context.outputs.can_run == 'true' && (steps.run-codex.outputs.final-message != '' || steps.run-codex.outcome != 'success' || steps.patch.outputs.changed == 'true' || steps.patch.outputs.blocked == 'true')
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
@@ -287,6 +287,6 @@ runs:
       run: node "${{ github.action_path }}/dist/feedback.js"
 
     - name: Fail failed Codex run
-      if: always() && steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true' && (steps.run-codex.outcome != 'success' || steps.patch.outputs.blocked == 'true' || steps.publish.outcome == 'failure')
+      if: always() && steps.context.outputs.can_run == 'true' && (steps.run-codex.outcome != 'success' || steps.patch.outputs.blocked == 'true' || steps.publish.outcome == 'failure')
       shell: bash
       run: exit 1

@@ -8,11 +8,6 @@ export type ProviderEnv = {
   OPENCODE_API_KEY?: string | undefined;
 };
 
-export type ProviderConfig = {
-  provider: Exclude<Provider, "auto">;
-  responsesApiEndpoint: string;
-};
-
 export const cloudflareResponsesApiUrl = (accountId: string) => {
   return `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1/responses`;
 };
@@ -66,11 +61,4 @@ export const responsesApiEndpoint = (provider: Exclude<Provider, "auto">, env: P
     throw new Error("OPENCODE_API_KEY is required when provider is opencode");
   }
   return "https://opencode.ai/zen/v1/responses";
-};
-
-export const buildProviderConfig = (
-  provider: Exclude<Provider, "auto">,
-  env: ProviderEnv,
-): ProviderConfig => {
-  return { provider, responsesApiEndpoint: responsesApiEndpoint(provider, env) };
 };
