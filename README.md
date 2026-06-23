@@ -8,6 +8,8 @@ We only target OpenAI-compatible Codex Responses models for now.
 
 ## Usage
 
+Create `.github/workflows/slash-codex.yml`:
+
 ```yaml
 name: Slash Codex
 
@@ -35,6 +37,12 @@ jobs:
           model: gpt-5.5
 ```
 
+Required setup:
+
+- Add the provider API key as a repository secret, such as `OPENAI_API_KEY`.
+- Enable `contents: write`, `issues: write`, and `pull-requests: write` permissions so the action can react, comment, push same-repo PR branch changes, and create issue-triggered PRs.
+- Keep the `if: github.event.sender.type != 'Bot'` guard to avoid bot-triggered loops.
+
 Trigger it with:
 
 ```text
@@ -47,6 +55,8 @@ Or ask for a review:
 /review focus on correctness and missing tests
 ```
 
+`/codex` runs in implementation mode. `/review` runs in review mode and is optimized for findings, regressions, and missing tests. Both commands accept the same trigger locations and permission checks.
+
 Add repository-specific instructions to every command with `prompt_file`:
 
 ```yaml
@@ -57,6 +67,21 @@ Add repository-specific instructions to every command with `prompt_file`:
 ```
 
 `prompt_file` is read from the PR base branch or default branch, not from the checked-out PR branch.
+
+## Trigger behavior
+
+Supported triggers:
+
+- Issue comments, including standalone issues and PR conversation comments.
+- Submitted PR reviews.
+- PR review file comments.
+
+Publishing behavior:
+
+- Same-repository PR comments can push commits to the PR branch when `push-pr-branch` is `true`.
+- Standalone issue comments can create a new branch and PR when `create-pr` is `true`.
+- Fork PRs are skipped by default. If `allow-forks` is `true`, they run read-only and do not receive pushed changes.
+- Actors need at least the configured `required-permission`, which defaults to `write`.
 
 ## Providers
 
@@ -133,6 +158,16 @@ Inputs are preferred because the nested Codex action can isolate keys from the C
 | `CLOUDFLARE_API_KEY`       | `cloudflare` | Yes.                       |
 | `CLOUDFLARE_AI_GATEWAY_ID` | `cloudflare` | No, defaults to `default`. |
 | `OPENCODE_API_KEY`         | `opencode`   | Yes for OpenCode Zen.      |
+
+## Outputs
+
+| Output          | Description                                                        |
+| --------------- | ------------------------------------------------------------------ |
+| `skipped`       | `true` when the event did not trigger a Codex run.                 |
+| `final-message` | Final message returned by Codex.                                   |
+| `changed`       | `true` when Codex changes were published.                          |
+| `pr-url`        | Pull request URL created from a standalone issue-triggered run.    |
+| `provider`      | Resolved model provider after `auto` detection or explicit config. |
 
 ## Safety
 
