@@ -24,6 +24,8 @@ jobs:
       - run: npm run check
 
       - name: Check generated dist
-        run: test -z "$(git status --porcelain dist)"
+        run: |
+          git diff --exit-code -- dist
+          test -z "$(git status --porcelain dist)"
 
       - uses: raven-actions/actionlint@v2
