@@ -255,6 +255,8 @@ runs:
         TARGET_ISSUE_NUMBER: ${{ steps.context.outputs.target_issue_number }}
         COMMIT_MESSAGE: ${{ inputs.commit-message }}
         BRANCH_PREFIX: ${{ inputs.branch-prefix }}
+        USER_PROMPT: ${{ steps.context.outputs.user_prompt }}
+        CODEX_FINAL_MESSAGE: ${{ steps.run-codex.outputs.final-message }}
       run: node "${{ github.action_path }}/dist/publish.js"
 
     - name: React to failure

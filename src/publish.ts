@@ -2,6 +2,7 @@ import * as core from "@actions/core";
 import { run } from "./command.js";
 import { getOctokit, github, repoContext } from "./github.js";
 import { boolOutput, stringOutput } from "./outputs.js";
+import { buildPullRequestBody } from "./publish-core.js";
 
 const required = (name: string) => {
   const value = process.env[name];
@@ -60,6 +61,11 @@ const main = async () => {
     const branch = `${prefix}/issue-${issueNumber}-${github.context.runId}-${github.context.runAttempt}`;
     const octokit = getOctokit();
     const repo = repoContext();
+    const body = buildPullRequestBody({
+      issueNumber,
+      request: process.env.USER_PROMPT || "",
+      finalMessage: process.env.CODEX_FINAL_MESSAGE || "",
+    });
 
     run("git", ["switch", "-c", branch]);
     run("git", ["commit", "-m", commitMessage]);
@@ -70,7 +76,7 @@ const main = async () => {
       base: baseRef,
       head: branch,
       title: `Codex changes for #${issueNumber}`,
-      body: `Generated from #${issueNumber}.`,
+      body,
     });
     boolOutput("changed", true);
     stringOutput("pr_url", pr.html_url);
