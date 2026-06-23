@@ -6,7 +6,9 @@ Just `/codex` it.
 
 We only target OpenAI-compatible Codex Responses models for now.
 
-## Usage
+## Quick Start
+
+Create a workflow such as `.github/workflows/slash-codex.yml`:
 
 ```yaml
 name: Slash Codex
@@ -35,17 +37,23 @@ jobs:
           model: gpt-5.5
 ```
 
-Trigger it with:
+No separate checkout step is required. The action determines the trigger context first, then checks out the writable PR branch, PR merge ref, or default branch as appropriate.
+
+Trigger Codex from an issue or pull request comment:
 
 ```text
 /codex fix the failing test
 ```
 
-Or ask for a review:
+Ask for a review from a PR comment, PR review, or review file comment:
 
 ```text
 /review focus on correctness and missing tests
 ```
+
+Standalone issue comments can create a new PR when `create-pr` is enabled. Same-repository PR comments can push commits to the PR branch when `push-pr-branch` is enabled. Both are enabled by default.
+
+## Repository Instructions
 
 Add repository-specific instructions to every command with `prompt_file`:
 
@@ -59,6 +67,8 @@ Add repository-specific instructions to every command with `prompt_file`:
 `prompt_file` is read from the PR base branch or default branch, not from the checked-out PR branch.
 
 ## Providers
+
+`provider: auto` selects the first configured provider in this order: OpenAI, Cloudflare, then OpenCode Zen. You can also set the provider explicitly.
 
 Use direct OpenAI:
 
@@ -96,7 +106,7 @@ Use OpenCode Zen:
 
 OpenCode Zen requests use `https://opencode.ai/zen/v1/responses`. Only Zen models on the Responses endpoint are supported.
 
-## Config
+## Configuration
 
 | Input                      | Default               | Description                                                                                                     |
 | -------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -134,11 +144,32 @@ Inputs are preferred because the nested Codex action can isolate keys from the C
 | `CLOUDFLARE_AI_GATEWAY_ID` | `cloudflare` | No, defaults to `default`. |
 | `OPENCODE_API_KEY`         | `opencode`   | Yes for OpenCode Zen.      |
 
+## Outputs
+
+| Output          | Description                                                     |
+| --------------- | --------------------------------------------------------------- |
+| `skipped`       | `true` when the event did not trigger a Codex run.              |
+| `final-message` | Final message returned by Codex.                                |
+| `changed`       | `true` when Codex changes were published.                       |
+| `pr-url`        | Pull request URL created from a standalone issue run.           |
+| `provider`      | Resolved provider: `openai`, `cloudflare`, or `opencode`.       |
+
 ## Safety
 
-Only users with the configured repository permission can run Codex. Same-repo PRs can receive commits. Standalone issues can create PRs. Fork PRs are skipped by default.
+Only users with the configured repository permission can run Codex. Same-repo PRs can receive commits. Standalone issues can create PRs. Fork PRs are skipped by default, or run in read-only mode when `allow-forks` is enabled.
 
 The action blocks changes to workflow files, this action's own metadata, `.env` files, and common private key/certificate extensions before publishing.
+
+Use `blocked-paths` to add repository-specific protected paths:
+
+```yaml
+- uses: elithrar/slash-codex@main
+  with:
+    openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+    blocked-paths: |
+      production/**
+      config/secrets/**
+```
 
 ## License
 
