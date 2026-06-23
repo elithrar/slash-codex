@@ -1,16 +1,22 @@
 import { build } from "esbuild";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
+
+const projectRoot = process.cwd();
 
 const rawTextPlugin = {
   name: "raw-text",
   setup(build) {
-    build.onResolve({ filter: /\?raw$/ }, (args) => ({
-      path: resolve(args.resolveDir, args.path.replace(/\?raw$/, "")),
-      namespace: "raw-text",
-    }));
+    build.onResolve({ filter: /\?raw$/ }, (args) => {
+      const absolutePath = resolve(args.resolveDir, args.path.replace(/\?raw$/, ""));
+      return {
+        path: relative(projectRoot, absolutePath).split("\\").join("/"),
+        namespace: "raw-text",
+        pluginData: { absolutePath },
+      };
+    });
     build.onLoad({ filter: /.*/, namespace: "raw-text" }, async (args) => ({
-      contents: await readFile(args.path, "utf8"),
+      contents: await readFile(args.pluginData.absolutePath, "utf8"),
       loader: "text",
     }));
   },
