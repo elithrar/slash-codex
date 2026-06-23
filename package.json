@@ -1,0 +1,30 @@
+{
+  "name": "slash-codex",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "format": "oxfmt src test scripts action.yml README.md package.json tsconfig.json .github/workflows/ci.yml",
+    "lint": "oxlint src test scripts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run test && npm run lint && npm run build"
+  },
+  "dependencies": {
+    "@actions/core": "^3.0.1",
+    "@actions/github": "^9.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.25",
+    "esbuild": "^0.28.1",
+    "oxfmt": "^0.55.0",
+    "oxlint": "^1.70.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.15"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

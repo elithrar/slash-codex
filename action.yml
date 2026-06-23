@@ -1,0 +1,285 @@
+name: "Slash Codex"
+description: "Run OpenAI Codex from /codex and /review comments, then publish safe changes."
+branding:
+  icon: "terminal"
+  color: "blue"
+
+inputs:
+  provider:
+    description: "Model provider: auto, openai, cloudflare, or opencode."
+    required: false
+    default: "auto"
+  openai-api-key:
+    description: "OpenAI API key. Prefer this input over env passthrough so the key is isolated by openai/codex-action."
+    required: false
+  cloudflare-api-key:
+    description: "Cloudflare API token with AI Gateway permission. Prefer this input over env passthrough."
+    required: false
+  cloudflare-account-id:
+    description: "Cloudflare account ID. Prefer this input over env passthrough."
+    required: false
+  cloudflare-ai-gateway-id:
+    description: "Cloudflare AI Gateway ID or slug. Defaults to default. Prefer this input over env passthrough."
+    required: false
+  opencode-api-key:
+    description: "OpenCode Zen API key. Prefer this input over env passthrough so the key is isolated by openai/codex-action."
+    required: false
+  model:
+    description: "OpenAI-compatible Codex Responses model to use."
+    required: false
+    default: "gpt-5.5"
+  commands:
+    description: "Comma-separated slash commands that trigger Codex."
+    required: false
+    default: "/codex,/review"
+  required-permission:
+    description: "Minimum repository permission required to run: write, maintain, or admin."
+    required: false
+    default: "write"
+  allow-forks:
+    description: "Run on fork PRs in read-only mode. Defaults to false to avoid exposing secrets to fork code."
+    required: false
+    default: "false"
+  create-pr:
+    description: "Allow standalone issue comments to create pull requests."
+    required: false
+    default: "true"
+  push-pr-branch:
+    description: "Allow same-repository PR comments to push commits to the PR branch."
+    required: false
+    default: "true"
+  commit-message:
+    description: "Commit message used when Codex publishes changes."
+    required: false
+    default: "apply codex changes"
+  branch-prefix:
+    description: "Branch prefix for PRs created from standalone issues."
+    required: false
+    default: "codex"
+  blocked-paths:
+    description: "Extra newline- or comma-separated glob patterns that Codex may not modify."
+    required: false
+  codex-version:
+    description: "Optional Codex CLI version passed to openai/codex-action."
+    required: false
+  codex-args:
+    description: "Extra arguments passed to codex exec by openai/codex-action."
+    required: false
+  effort:
+    description: "Optional reasoning effort passed to openai/codex-action."
+    required: false
+  safety-strategy:
+    description: "Privilege reduction strategy passed to openai/codex-action."
+    required: false
+    default: "drop-sudo"
+  github-token:
+    description: "GitHub token used for API calls, comments, pushes, and PR creation."
+    required: false
+
+outputs:
+  skipped:
+    description: "true when the event did not trigger a Codex run."
+    value: ${{ steps.context.outputs.skipped }}
+  final-message:
+    description: "Final message from Codex."
+    value: ${{ steps.run-codex.outputs.final-message }}
+  changed:
+    description: "true when Codex changes were published."
+    value: ${{ steps.publish.outputs.changed || 'false' }}
+  pr-url:
+    description: "Pull request URL created from an issue-triggered run."
+    value: ${{ steps.publish.outputs.pr_url }}
+  provider:
+    description: "Resolved model provider."
+    value: ${{ steps.provider.outputs.provider }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Determine trigger context
+      id: context
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+        COMMANDS: ${{ inputs.commands }}
+        REQUIRED_PERMISSION: ${{ inputs.required-permission }}
+        ALLOW_FORKS: ${{ inputs.allow-forks }}
+        CREATE_PR: ${{ inputs.create-pr }}
+        PUSH_PR_BRANCH: ${{ inputs.push-pr-branch }}
+      run: node "${{ github.action_path }}/dist/context.js"
+
+    - name: React to trigger
+      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+        REACTION_SUBJECT_ID: ${{ steps.context.outputs.reaction_subject_id }}
+      run: node "${{ github.action_path }}/dist/react.js"
+
+    - name: Checkout writable PR branch
+      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true' && steps.context.outputs.can_modify == 'true'
+      uses: actions/checkout@v5
+      with:
+        ref: ${{ steps.context.outputs.head_ref }}
+        fetch-depth: 0
+        persist-credentials: false
+
+    - name: Checkout PR merge ref
+      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true' && steps.context.outputs.pr_number != '' && steps.context.outputs.can_modify != 'true'
+      uses: actions/checkout@v5
+      with:
+        ref: refs/pull/${{ steps.context.outputs.pr_number }}/merge
+        fetch-depth: 0
+        persist-credentials: false
+
+    - name: Checkout default branch
+      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true' && steps.context.outputs.pr_number == ''
+      uses: actions/checkout@v5
+      with:
+        ref: ${{ steps.context.outputs.base_ref }}
+        fetch-depth: 1
+        persist-credentials: false
+
+    - name: Configure provider
+      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true'
+      id: provider
+      shell: bash
+      env:
+        PROVIDER: ${{ inputs.provider }}
+        OPENAI_API_KEY: ${{ inputs.openai-api-key || env.OPENAI_API_KEY }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id || env.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_AI_GATEWAY_ID: ${{ inputs.cloudflare-ai-gateway-id || env.CLOUDFLARE_AI_GATEWAY_ID }}
+        CLOUDFLARE_API_KEY: ${{ inputs.cloudflare-api-key || env.CLOUDFLARE_API_KEY }}
+        OPENCODE_API_KEY: ${{ inputs.opencode-api-key || env.OPENCODE_API_KEY }}
+      run: node "${{ github.action_path }}/dist/provider.js"
+
+    - name: Start Cloudflare AI Gateway proxy
+      if: steps.provider.outputs.provider == 'cloudflare'
+      id: cloudflare-proxy
+      shell: bash
+      env:
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id || env.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_AI_GATEWAY_ID: ${{ inputs.cloudflare-ai-gateway-id || env.CLOUDFLARE_AI_GATEWAY_ID }}
+        OPENAI_API_KEY: ""
+        CLOUDFLARE_API_KEY: ""
+        CLOUDFLARE_API_TOKEN: ""
+        CF_API_KEY: ""
+        CF_API_TOKEN: ""
+        OPENCODE_API_KEY: ""
+        ENDPOINT_FILE: ${{ runner.temp }}/slash-codex-cloudflare-endpoint
+      run: |
+        node "${{ github.action_path }}/dist/cloudflare-proxy.js" &
+        for _ in {1..50}; do
+          if [ -s "$ENDPOINT_FILE" ]; then
+            break
+          fi
+          sleep 0.1
+        done
+        if [ ! -s "$ENDPOINT_FILE" ]; then
+          echo "Cloudflare proxy did not start" >&2
+          exit 1
+        fi
+        echo "responses_api_endpoint=$(cat "$ENDPOINT_FILE")" >> "$GITHUB_OUTPUT"
+
+    - name: Write Codex prompt
+      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true'
+      id: prompt
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+        COMMAND: ${{ steps.context.outputs.command }}
+        CAN_MODIFY: ${{ steps.context.outputs.can_modify }}
+        CAN_CREATE_PR: ${{ steps.context.outputs.can_create_pr }}
+        USER_PROMPT: ${{ steps.context.outputs.user_prompt }}
+        PR_NUMBER: ${{ steps.context.outputs.pr_number }}
+        TRIGGER_URL: ${{ steps.context.outputs.trigger_url }}
+      run: node "${{ github.action_path }}/dist/prompt.js"
+
+    - name: Pre-fetch PR refs
+      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true' && steps.context.outputs.pr_number != ''
+      shell: bash
+      env:
+        PR_BASE_REF: ${{ steps.prompt.outputs.base_ref }}
+        PR_NUMBER: ${{ steps.context.outputs.pr_number }}
+      run: git fetch --no-tags origin "$PR_BASE_REF" "+refs/pull/$PR_NUMBER/head"
+
+    - name: Run Codex
+      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true'
+      id: run-codex
+      continue-on-error: true
+      uses: openai/codex-action@v1
+      env:
+        OPENAI_API_KEY: ""
+        CLOUDFLARE_API_KEY: ""
+        CLOUDFLARE_API_TOKEN: ""
+        CF_API_KEY: ""
+        CF_API_TOKEN: ""
+        CLOUDFLARE_ACCOUNT_ID: ""
+        CLOUDFLARE_AI_GATEWAY_ID: ""
+        OPENCODE_API_KEY: ""
+      with:
+        openai-api-key: ${{ steps.provider.outputs.provider == 'cloudflare' && (inputs.cloudflare-api-key || env.CLOUDFLARE_API_KEY) || steps.provider.outputs.provider == 'opencode' && (inputs.opencode-api-key || env.OPENCODE_API_KEY) || (inputs.openai-api-key || env.OPENAI_API_KEY) }}
+        responses-api-endpoint: ${{ steps.cloudflare-proxy.outputs.responses_api_endpoint || steps.provider.outputs.responses_api_endpoint }}
+        model: ${{ inputs.model }}
+        effort: ${{ inputs.effort }}
+        prompt-file: ${{ steps.prompt.outputs.prompt_file }}
+        output-file: .slash-codex-output.md
+        sandbox: ${{ (steps.context.outputs.can_modify == 'true' || steps.context.outputs.can_create_pr == 'true') && 'workspace-write' || 'read-only' }}
+        safety-strategy: ${{ inputs.safety-strategy }}
+        codex-version: ${{ inputs.codex-version }}
+        codex-args: ${{ inputs.codex-args }}
+
+    - name: Capture Codex changes
+      if: steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true' && (steps.context.outputs.can_modify == 'true' || steps.context.outputs.can_create_pr == 'true') && steps.run-codex.outcome == 'success'
+      id: patch
+      shell: bash
+      env:
+        BLOCKED_PATHS: ${{ inputs.blocked-paths }}
+      run: node "${{ github.action_path }}/dist/capture.js"
+
+    - name: Publish Codex changes
+      if: steps.patch.outputs.changed == 'true' && steps.patch.outputs.blocked != 'true'
+      id: publish
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+        CAN_MODIFY: ${{ steps.context.outputs.can_modify }}
+        CAN_CREATE_PR: ${{ steps.context.outputs.can_create_pr }}
+        HEAD_REF: ${{ steps.context.outputs.head_ref }}
+        BASE_REF: ${{ steps.context.outputs.base_ref || steps.prompt.outputs.base_ref }}
+        TARGET_ISSUE_NUMBER: ${{ steps.context.outputs.target_issue_number }}
+        COMMIT_MESSAGE: ${{ inputs.commit-message }}
+        BRANCH_PREFIX: ${{ inputs.branch-prefix }}
+      run: node "${{ github.action_path }}/dist/publish.js"
+
+    - name: React to failure
+      if: always() && steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true' && (steps.run-codex.outcome != 'success' || steps.patch.outputs.blocked == 'true' || steps.publish.outcome == 'failure')
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+        REACTION_SUBJECT_ID: ${{ steps.context.outputs.reaction_subject_id }}
+        REMOVE_REACTION_CONTENT: THUMBS_UP
+        ADD_REACTION_CONTENT: THUMBS_DOWN
+      run: node "${{ github.action_path }}/dist/react.js"
+
+    - name: Post Codex feedback
+      if: always() && steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true' && (steps.run-codex.outputs.final-message != '' || steps.run-codex.outcome != 'success' || steps.patch.outputs.changed == 'true' || steps.patch.outputs.blocked == 'true')
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+        CODEX_FINAL_MESSAGE: ${{ steps.run-codex.outputs.final-message }}
+        CODEX_OUTCOME: ${{ steps.run-codex.outcome }}
+        PATCH_CHANGED: ${{ steps.patch.outputs.changed }}
+        PATCH_BLOCKED: ${{ steps.patch.outputs.blocked }}
+        PATCH_BLOCKED_PATHS: ${{ steps.patch.outputs.blocked_paths }}
+        PUBLISH_CHANGED: ${{ steps.publish.outputs.changed }}
+        CREATED_PR_URL: ${{ steps.publish.outputs.pr_url }}
+        PUBLISH_OUTCOME: ${{ steps.publish.outcome }}
+        REVIEW_COMMENT_ID: ${{ steps.context.outputs.review_comment_id }}
+        TARGET_ISSUE_NUMBER: ${{ steps.context.outputs.target_issue_number }}
+      run: node "${{ github.action_path }}/dist/feedback.js"
+
+    - name: Fail failed Codex run
+      if: always() && steps.context.outputs.is_valid == 'true' && steps.context.outputs.can_run == 'true' && (steps.run-codex.outcome != 'success' || steps.patch.outputs.blocked == 'true' || steps.publish.outcome == 'failure')
+      shell: bash
+      run: exit 1
