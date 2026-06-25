@@ -111,8 +111,8 @@ OpenCode Zen requests use `https://opencode.ai/zen/v1/responses`. Only Zen model
 | `prompt_file`              | empty                 | Repository path to extra prompt instructions injected into every command. Read from the PR base/default branch. |
 | `required-permission`      | `write`               | Minimum actor permission: `write`, `maintain`, or `admin`.                                                      |
 | `allow-forks`              | `false`               | Run on fork PRs in read-only mode. Defaults safe.                                                               |
-| `create-pr`                | `true`                | Allow standalone issue comments to create PRs.                                                                  |
-| `push-pr-branch`           | `true`                | Allow same-repo PR comments to push commits.                                                                    |
+| `create-pr`                | `true`                | Allow standalone issue comments to create or update Codex PRs.                                                  |
+| `push-pr-branch`           | `true`                | Allow same-repo PR comments to push commits and sync branches.                                                  |
 | `commit-message`           | `apply codex changes` | Commit message for published changes.                                                                           |
 | `branch-prefix`            | `codex`               | Branch prefix for issue-created PRs.                                                                            |
 | `blocked-paths`            | built-in list         | Extra newline- or comma-separated blocked globs.                                                                |
@@ -136,7 +136,9 @@ Inputs are preferred because the nested Codex action can isolate keys from the C
 
 ## Safety
 
-Only users with the configured repository permission can run Codex. Same-repo PRs can receive commits. Standalone issues can create PRs. Fork PRs are skipped by default.
+Only users with the configured repository permission can run Codex. Same-repo PRs can receive commits and branch syncs. Standalone issues create PRs on deterministic branches like `codex/issue-123`; later issue comments update the existing open PR for that branch instead of opening duplicates. Fork PRs are skipped by default.
+
+Codex itself receives no GitHub token and should only edit files. The action harness owns ref fetching, commits, pushes, PR creation, PR updates, reactions, comments, and same-repo branch syncs.
 
 The action blocks changes to workflow files, this action's own metadata, `.env` files, and common private key/certificate extensions before publishing.
 

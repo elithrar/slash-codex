@@ -18755,7 +18755,7 @@ var require_undici = __commonJS({
 
 // src/capture.ts
 import { execFileSync } from "node:child_process";
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 
 // node_modules/@actions/core/lib/command.js
 import * as os from "os";
@@ -19301,13 +19301,111 @@ var stagedPaths = () => {
   const output = git(["diff", "--cached", "--name-only", "-z"]);
   return output.split("\0").filter(Boolean);
 };
+var unmergedPaths = () => {
+  const output = git(["diff", "--name-only", "--diff-filter=U", "-z"]);
+  return output.split("\0").filter(Boolean);
+};
+var expectedConflictPaths = () => {
+  return (process.env.CONFLICTED_PATHS || "").split(/\r?\n/).map((path) => path.trim()).filter(Boolean);
+};
+var mergeStagedEntries = () => {
+  return (process.env.MERGE_STAGED_ENTRIES || "").split(/\r?\n/).map((entry) => entry.replace(/\r$/, "")).filter(Boolean);
+};
+var normalizeLsFilesOutput = (value) => value.replace(/\r?\n$/, "");
+var pathFromStagedEntry = (entry) => {
+  if (entry.startsWith("D	")) {
+    return entry.slice(2);
+  }
+  return entry.replace(/^\d+\s+[0-9a-f]+\s+\d+\t/, "");
+};
+var mergeStagedEntryMap = () => {
+  return new Map(mergeStagedEntries().map((entry) => [pathFromStagedEntry(entry), entry]));
+};
+var hasConflictMarkers = (content, wasUnmerged) => {
+  if (/^<{7}|^>{7}/m.test(content)) {
+    return true;
+  }
+  if (!wasUnmerged) {
+    return false;
+  }
+  const lines = content.split(/\r?\n/);
+  return lines.some((line, index) => {
+    if (/^\|{7}(?:\s.*)?$/.test(line)) {
+      return true;
+    }
+    if (!/^={7}(?:\s.*)?$/.test(line)) {
+      return false;
+    }
+    const before = lines.slice(0, index).some((candidate) => candidate.trim() !== "");
+    const after = lines.slice(index + 1).some((candidate) => candidate.trim() !== "");
+    return before && after;
+  });
+};
+var pathsWithConflictMarkers = (paths, initiallyUnmerged) => {
+  const unmerged = new Set(initiallyUnmerged);
+  return paths.filter((path) => {
+    if (!unmerged.has(path)) {
+      return false;
+    }
+    try {
+      const content = readFileSync(path, "utf8");
+      return hasConflictMarkers(content, true);
+    } catch {
+      return false;
+    }
+  });
+};
+var hasMergeInProgress = () => {
+  try {
+    git(["rev-parse", "--verify", "MERGE_HEAD"]);
+    return true;
+  } catch {
+    return false;
+  }
+};
+var isStagedDeletion = (path) => {
+  try {
+    git(["diff", "--cached", "--quiet", "--diff-filter=D", "--", path]);
+    return false;
+  } catch {
+    return true;
+  }
+};
+var stagedEntry = (path) => {
+  try {
+    const entry = normalizeLsFilesOutput(git(["ls-files", "-s", "--", path]));
+    return entry || (isStagedDeletion(path) ? `D	${path}` : "");
+  } catch {
+    return "";
+  }
+};
 var main = () => {
   for (const path of [".slash-codex-prompt.md", ".slash-codex-output.md", "codex.patch"]) {
     rmSync(path, { force: true });
   }
+  const initiallyUnmerged = [.../* @__PURE__ */ new Set([...expectedConflictPaths(), ...unmergedPaths()])];
   git(["add", "-A", "."]);
-  const paths = stagedPaths();
-  const blocked = blockedPaths(paths, process.env.BLOCKED_PATHS || "");
+  if (initiallyUnmerged.length > 0 && !hasMergeInProgress()) {
+    throw new Error("Codex aborted the sync merge instead of resolving conflicts");
+  }
+  const unmerged = unmergedPaths();
+  if (unmerged.length > 0) {
+    throw new Error(`Codex left unresolved merge conflicts: ${unmerged.join(", ")}`);
+  }
+  const paths = [.../* @__PURE__ */ new Set([...stagedPaths(), ...initiallyUnmerged])];
+  const initiallyUnmergedSet = new Set(initiallyUnmerged);
+  const mergeStagedEntriesByPath = mergeStagedEntryMap();
+  const blockedCheckPaths = paths.filter((path) => {
+    if (initiallyUnmergedSet.has(path)) {
+      return true;
+    }
+    const mergeStagedEntry = mergeStagedEntriesByPath.get(path);
+    if (mergeStagedEntry !== void 0) {
+      return mergeStagedEntry !== stagedEntry(path);
+    }
+    return true;
+  });
+  const blocked = blockedPaths(blockedCheckPaths, process.env.BLOCKED_PATHS || "");
   if (blocked.length > 0) {
     boolOutput("changed", false);
     boolOutput("blocked", true);
@@ -19317,8 +19415,12 @@ var main = () => {
     }
     return;
   }
+  const conflictMarkerPaths = pathsWithConflictMarkers(paths, initiallyUnmerged);
+  if (conflictMarkerPaths.length > 0) {
+    throw new Error(`Codex left conflict markers in: ${conflictMarkerPaths.join(", ")}`);
+  }
   boolOutput("blocked", false);
-  if (paths.length === 0) {
+  if (paths.length === 0 && !hasMergeInProgress()) {
     boolOutput("changed", false);
     return;
   }
