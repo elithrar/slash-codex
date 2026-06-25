@@ -10,6 +10,7 @@ export type PromptInput = {
   repo: string;
   eventName: string;
   command: string;
+  actionMode: string;
   canModify: boolean;
   canCreatePr: boolean;
   userPrompt: string;
@@ -59,6 +60,7 @@ ${
 - Base ref: ${input.baseRef}
 - Base SHA: ${input.baseSha}
 - Head SHA: ${input.headSha}
+- Harness mode: ${input.actionMode || "read_only"}
 
 Useful commands:
 - git diff --stat ${input.baseSha}...${input.headSha}

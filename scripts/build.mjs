@@ -28,9 +28,11 @@ const entries = [
   "context",
   "feedback",
   "prompt",
+  "prepare-refs",
   "provider",
   "publish",
   "react",
+  "sync",
 ];
 
 await Promise.all(

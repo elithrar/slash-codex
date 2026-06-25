@@ -58,6 +58,7 @@ const main = async () => {
     repo: repo.repo,
     eventName: github.context.eventName,
     command: process.env.COMMAND || "codex",
+    actionMode: process.env.ACTION_MODE || "read_only",
     canModify: process.env.CAN_MODIFY === "true",
     canCreatePr: process.env.CAN_CREATE_PR === "true",
     userPrompt: process.env.USER_PROMPT || "",

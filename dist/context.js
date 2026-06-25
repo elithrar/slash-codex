@@ -20146,6 +20146,8 @@ function info(message) {
 }
 
 // src/context-core.ts
+var sanitizeBranchPrefix = (prefix) => (prefix || "codex").replace(/[^A-Za-z0-9._/-]/g, "-").replace(/^\/+|\/+$/g, "") || "codex";
+var issueBranchName = (prefix, issueNumber) => `${sanitizeBranchPrefix(prefix)}/issue-${issueNumber}`;
 var permissionOrder = {
   none: 0,
   read: 1,
@@ -20184,6 +20186,28 @@ var hasPermission = (permission, required) => {
   const minimum = normalized === "admin" || normalized === "maintain" || normalized === "write" ? normalized : "write";
   return permissionOrder[permission] >= permissionOrder[minimum];
 };
+var syncStrategyForPrompt = (prompt) => {
+  const normalized = prompt.toLowerCase();
+  if (/\b(?:do not|don't|dont|never|without|no)\s+(?:\w+\s+){0,3}(?:rebase|sync|merge)\b/.test(
+    normalized
+  ) || /\bno\s+need\s+to\s+(?:rebase|sync|merge)\b/.test(normalized)) {
+    return "";
+  }
+  const prefix = "(?:please\\s+)?";
+  const target = "(?:this|the)\\s+(?:pr|pull request|branch)";
+  const base = "(?:base|main|master|default)";
+  if (new RegExp(
+    `^${prefix}rebase(?:\\s+${target})?(?:\\s+(?:against|onto|from)\\s+${base})?\\s*$`
+  ).test(normalized)) {
+    return "rebase";
+  }
+  if (new RegExp(
+    `^${prefix}(?:sync|update)\\s+${target}\\s+(?:with|against|from|onto)\\s+${base}\\s*$`
+  ).test(normalized) || new RegExp(`^${prefix}merge\\s+${base}\\s+into\\s+${target}\\s*$`).test(normalized)) {
+    return "merge";
+  }
+  return "";
+};
 var bodyForEvent = (eventName, payload) => {
   if (eventName === "pull_request_review") {
     return payload.review?.body ?? "";
@@ -20199,6 +20223,7 @@ var resolveTrigger = ({
   options,
   actorPermission,
   pullRequest,
+  existingIssuePullRequest,
   repositoryFullName
 }) => {
   const unsupported = ![
@@ -20212,18 +20237,30 @@ var resolveTrigger = ({
   const isBot = payload.sender?.type === "Bot";
   const isPullRequestIssueComment = eventName === "issue_comment" && Boolean(payload.issue?.pull_request);
   const isStandaloneIssueComment = eventName === "issue_comment" && Boolean(payload.issue) && !payload.issue?.pull_request;
-  const prNumber = pullRequest?.number ?? payload.pull_request?.number ?? (isPullRequestIssueComment ? payload.issue?.number : "");
+  const prNumber = pullRequest?.number ?? existingIssuePullRequest?.number ?? payload.pull_request?.number ?? (isPullRequestIssueComment ? payload.issue?.number : "");
   const targetIssueNumber = payload.issue?.number ?? prNumber ?? "";
   const isFork = Boolean(pullRequest?.headRepo && pullRequest.headRepo !== repositoryFullName);
+  const isExistingIssuePrFork = Boolean(
+    existingIssuePullRequest?.headRepo && existingIssuePullRequest.headRepo !== repositoryFullName
+  );
   const hasRequiredPermission = hasPermission(actorPermission, options.requiredPermission);
   const blockedFork = isFork && !options.allowForks;
   const skipReason = unsupported ? `unsupported event: ${eventName}` : isBot ? "bot sender" : !parsed ? "no slash command" : !hasRequiredPermission ? `insufficient permission: ${actorPermission}` : blockedFork ? "fork pull request" : "";
   const canRun = skipReason === "";
   const skipped = skipReason !== "";
-  const canModify = Boolean(
-    canRun && options.pushPrBranch && pullRequest && pullRequest.headRepo === repositoryFullName
+  const writablePullRequest = Boolean(
+    canRun && options.pushPrBranch && pullRequest && pullRequest.state !== "closed" && pullRequest.headRepo === repositoryFullName
   );
-  const canCreatePr = Boolean(canRun && options.createPr && isStandaloneIssueComment);
+  const writableExistingIssuePullRequest = Boolean(
+    canRun && options.pushPrBranch && existingIssuePullRequest && existingIssuePullRequest.state !== "closed" && existingIssuePullRequest.headRepo === repositoryFullName && !isExistingIssuePrFork
+  );
+  const syncStrategy = parsed && parsed.command !== "review" ? syncStrategyForPrompt(parsed.userPrompt) : "";
+  const mode = !canRun ? "read_only" : syncStrategy && (writablePullRequest || writableExistingIssuePullRequest) ? "sync_pr" : writablePullRequest ? "update_pr" : writableExistingIssuePullRequest ? "update_codex_pr" : options.createPr && isStandaloneIssueComment && !existingIssuePullRequest ? "create_pr" : "read_only";
+  const canModify = Boolean(
+    mode === "update_pr" || mode === "update_codex_pr" || mode === "sync_pr"
+  );
+  const canCreatePr = mode === "create_pr";
+  const targetPullRequest = pullRequest ?? existingIssuePullRequest ?? null;
   return {
     isValid: Boolean(parsed),
     skipped,
@@ -20235,9 +20272,10 @@ var resolveTrigger = ({
     canRun,
     canModify,
     canCreatePr,
-    baseRef: pullRequest?.baseRef ?? defaultBranch,
-    headRef: pullRequest?.headRef ?? "",
-    headRepo: pullRequest?.headRepo ?? "",
+    mode,
+    baseRef: targetPullRequest?.baseRef ?? defaultBranch,
+    headRef: targetPullRequest?.headRef ?? "",
+    headRepo: targetPullRequest?.headRepo ?? "",
     reviewCommentId: eventName === "pull_request_review_comment" ? String(payload.comment?.id ?? "") : "",
     reactionSubjectId: payload.comment?.node_id ?? payload.review?.node_id ?? "",
     triggerUrl: payload.comment?.html_url ?? payload.review?.html_url ?? payload.issue?.html_url ?? "",
@@ -24032,7 +24070,8 @@ var optionsFromEnv = () => ({
   requiredPermission: process.env.REQUIRED_PERMISSION || "write",
   allowForks: boolEnv("ALLOW_FORKS", false),
   createPr: boolEnv("CREATE_PR", true),
-  pushPrBranch: boolEnv("PUSH_PR_BRANCH", true)
+  pushPrBranch: boolEnv("PUSH_PR_BRANCH", true),
+  branchPrefix: process.env.BRANCH_PREFIX || "codex"
 });
 var getPrNumber = () => {
   const payload = github_exports.context.payload;
@@ -24115,8 +24154,34 @@ var main = async () => {
       headRepo: pr.head.repo?.full_name ?? "",
       baseRef: pr.base.ref,
       baseSha: pr.base.sha,
-      headSha: pr.head.sha
+      headSha: pr.head.sha,
+      state: pr.state
     };
+  }
+  let existingIssuePullRequest = null;
+  if (!prNumber && triggerPayload.issue?.number && options.createPr) {
+    const branch = issueBranchName(options.branchPrefix, triggerPayload.issue.number);
+    const prs = await octokit.paginate(octokit.rest.pulls.list, {
+      ...repo,
+      state: "open",
+      per_page: 100
+    });
+    const escapedBranch = branch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const branchFallbackPattern = new RegExp(`^${escapedBranch}-\\d+-\\d+$`);
+    const existing = prs.find(
+      (pr) => pr.head.repo?.full_name === `${repo.owner}/${repo.repo}` && (pr.head.ref === branch || branchFallbackPattern.test(pr.head.ref))
+    );
+    if (existing) {
+      existingIssuePullRequest = {
+        number: existing.number,
+        headRef: existing.head.ref,
+        headRepo: existing.head.repo?.full_name ?? "",
+        baseRef: existing.base.ref,
+        baseSha: existing.base.sha,
+        headSha: existing.head.sha,
+        state: existing.state
+      };
+    }
   }
   const resolution = resolveTrigger({
     eventName: github_exports.context.eventName,
@@ -24124,6 +24189,7 @@ var main = async () => {
     options,
     actorPermission,
     pullRequest,
+    existingIssuePullRequest,
     repositoryFullName: `${repo.owner}/${repo.repo}`
   });
   const body = bodyForEvent(github_exports.context.eventName, triggerPayload);
@@ -24138,6 +24204,7 @@ var main = async () => {
   boolOutput("can_run", resolution.canRun);
   boolOutput("can_modify", resolution.canModify);
   boolOutput("can_create_pr", resolution.canCreatePr);
+  stringOutput("mode", resolution.mode);
   stringOutput("command", resolution.command);
   stringOutput("user_prompt", resolution.userPrompt);
   stringOutput("pr_number", resolution.prNumber);
@@ -24146,6 +24213,8 @@ var main = async () => {
   stringOutput("base_ref", resolution.baseRef);
   stringOutput("head_ref", resolution.headRef);
   stringOutput("head_repo", resolution.headRepo);
+  stringOutput("base_sha", pullRequest?.baseSha ?? existingIssuePullRequest?.baseSha ?? "");
+  stringOutput("head_sha", pullRequest?.headSha ?? existingIssuePullRequest?.headSha ?? "");
   stringOutput("review_comment_id", resolution.reviewCommentId);
   stringOutput("reaction_subject_id", resolution.reactionSubjectId);
   stringOutput("trigger_url", resolution.triggerUrl);

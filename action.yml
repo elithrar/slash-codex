@@ -85,16 +85,16 @@ outputs:
     value: ${{ steps.context.outputs.skipped }}
   final-message:
     description: "Final message from Codex."
-    value: ${{ steps.run-codex.outputs.final-message }}
+    value: ${{ steps.sync.outputs.conflicted == 'true' && steps.run-sync-codex.outputs.final-message || steps.run-codex.outputs.final-message }}
   changed:
     description: "true when Codex changes were published."
-    value: ${{ steps.publish.outputs.changed || 'false' }}
+    value: ${{ steps.publish.outputs.changed == 'true' || steps.sync.outputs.changed == 'true' }}
   pr-url:
     description: "Pull request URL created from an issue-triggered run."
-    value: ${{ steps.publish.outputs.pr_url }}
+    value: ${{ steps.publish.outputs.pr_url || steps.sync.outputs.pr_url }}
   provider:
     description: "Resolved model provider."
-    value: ${{ steps.provider.outputs.provider }}
+    value: ${{ steps.provider.outputs.provider || steps.sync-provider.outputs.provider }}
 
 runs:
   using: "composite"
@@ -109,6 +109,7 @@ runs:
         ALLOW_FORKS: ${{ inputs.allow-forks }}
         CREATE_PR: ${{ inputs.create-pr }}
         PUSH_PR_BRANCH: ${{ inputs.push-pr-branch }}
+        BRANCH_PREFIX: ${{ inputs.branch-prefix }}
       run: node "${{ github.action_path }}/dist/context.js"
 
     - name: React to trigger
@@ -120,7 +121,7 @@ runs:
       run: node "${{ github.action_path }}/dist/react.js"
 
     - name: Checkout writable PR branch
-      if: steps.context.outputs.can_run == 'true' && steps.context.outputs.can_modify == 'true'
+      if: steps.context.outputs.can_run == 'true' && (steps.context.outputs.mode == 'update_pr' || steps.context.outputs.mode == 'update_codex_pr' || steps.context.outputs.mode == 'sync_pr')
       uses: actions/checkout@v5
       with:
         ref: ${{ steps.context.outputs.head_ref }}
@@ -128,7 +129,7 @@ runs:
         persist-credentials: false
 
     - name: Checkout PR merge ref
-      if: steps.context.outputs.can_run == 'true' && steps.context.outputs.pr_number != '' && steps.context.outputs.can_modify != 'true'
+      if: steps.context.outputs.can_run == 'true' && steps.context.outputs.pr_number != '' && steps.context.outputs.mode == 'read_only'
       uses: actions/checkout@v5
       with:
         ref: refs/pull/${{ steps.context.outputs.pr_number }}/merge
@@ -144,7 +145,7 @@ runs:
         persist-credentials: false
 
     - name: Configure provider
-      if: steps.context.outputs.can_run == 'true'
+      if: steps.context.outputs.can_run == 'true' && steps.context.outputs.mode != 'sync_pr'
       id: provider
       shell: bash
       env:
@@ -185,7 +186,7 @@ runs:
         echo "responses_api_endpoint=$(cat "$ENDPOINT_FILE")" >> "$GITHUB_OUTPUT"
 
     - name: Write Codex prompt
-      if: steps.context.outputs.can_run == 'true'
+      if: steps.context.outputs.can_run == 'true' && steps.context.outputs.mode != 'sync_pr'
       id: prompt
       shell: bash
       env:
@@ -193,6 +194,7 @@ runs:
         COMMAND: ${{ steps.context.outputs.command }}
         CAN_MODIFY: ${{ steps.context.outputs.can_modify }}
         CAN_CREATE_PR: ${{ steps.context.outputs.can_create_pr }}
+        ACTION_MODE: ${{ steps.context.outputs.mode }}
         USER_PROMPT: ${{ steps.context.outputs.user_prompt }}
         PR_NUMBER: ${{ steps.context.outputs.pr_number }}
         TRIGGER_URL: ${{ steps.context.outputs.trigger_url }}
@@ -200,16 +202,94 @@ runs:
         PROMPT_FILE_REF: ${{ steps.context.outputs.base_ref }}
       run: node "${{ github.action_path }}/dist/prompt.js"
 
-    - name: Pre-fetch PR refs
+    - name: Prepare PR refs
       if: steps.context.outputs.can_run == 'true' && steps.context.outputs.pr_number != ''
+      id: prepare_refs
       shell: bash
       env:
-        PR_BASE_REF: ${{ steps.prompt.outputs.base_ref }}
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+        ACTION_MODE: ${{ steps.context.outputs.mode }}
+        PR_BASE_REF: ${{ steps.context.outputs.base_ref || steps.prompt.outputs.base_ref }}
+        PR_HEAD_REF: ${{ steps.context.outputs.head_ref }}
         PR_NUMBER: ${{ steps.context.outputs.pr_number }}
-      run: git fetch --no-tags origin "$PR_BASE_REF" "+refs/pull/$PR_NUMBER/head"
+      run: node "${{ github.action_path }}/dist/prepare-refs.js"
+
+    - name: Sync PR branch
+      if: steps.context.outputs.can_run == 'true' && steps.context.outputs.mode == 'sync_pr'
+      id: sync
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+        PR_NUMBER: ${{ steps.context.outputs.pr_number }}
+        HEAD_REF: ${{ steps.context.outputs.head_ref }}
+        BASE_REF: ${{ steps.context.outputs.base_ref || steps.prompt.outputs.base_ref }}
+        HEAD_SHA: ${{ steps.context.outputs.head_sha }}
+        USER_PROMPT: ${{ steps.context.outputs.user_prompt }}
+      run: node "${{ github.action_path }}/dist/sync.js"
+
+    - name: Configure provider for sync conflicts
+      if: steps.sync.outputs.conflicted == 'true'
+      id: sync-provider
+      shell: bash
+      env:
+        PROVIDER: ${{ inputs.provider }}
+        OPENAI_API_KEY: ${{ inputs.openai-api-key || env.OPENAI_API_KEY }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id || env.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_AI_GATEWAY_ID: ${{ inputs.cloudflare-ai-gateway-id || env.CLOUDFLARE_AI_GATEWAY_ID }}
+        CLOUDFLARE_API_KEY: ${{ inputs.cloudflare-api-key || env.CLOUDFLARE_API_KEY }}
+        OPENCODE_API_KEY: ${{ inputs.opencode-api-key || env.OPENCODE_API_KEY }}
+      run: node "${{ github.action_path }}/dist/provider.js"
+
+    - name: Start Cloudflare AI Gateway proxy for sync conflicts
+      if: steps.sync-provider.outputs.provider == 'cloudflare'
+      id: sync-cloudflare-proxy
+      shell: bash
+      env:
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id || env.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_AI_GATEWAY_ID: ${{ inputs.cloudflare-ai-gateway-id || env.CLOUDFLARE_AI_GATEWAY_ID }}
+        OPENAI_API_KEY: ""
+        CLOUDFLARE_API_KEY: ""
+        CLOUDFLARE_API_TOKEN: ""
+        CF_API_KEY: ""
+        CF_API_TOKEN: ""
+        OPENCODE_API_KEY: ""
+        ENDPOINT_FILE: ${{ runner.temp }}/slash-codex-cloudflare-sync-endpoint
+      run: |
+        node "${{ github.action_path }}/dist/cloudflare-proxy.js" &
+        for _ in {1..50}; do
+          if [ -s "$ENDPOINT_FILE" ]; then
+            break
+          fi
+          sleep 0.1
+        done
+        if [ ! -s "$ENDPOINT_FILE" ]; then
+          echo "Cloudflare proxy did not start" >&2
+          exit 1
+        fi
+        echo "responses_api_endpoint=$(cat "$ENDPOINT_FILE")" >> "$GITHUB_OUTPUT"
+
+    - name: Write sync conflict prompt
+      if: steps.sync.outputs.conflicted == 'true'
+      id: sync-prompt
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+        COMMAND: codex
+        CAN_MODIFY: true
+        CAN_CREATE_PR: false
+        ACTION_MODE: update_pr
+        USER_PROMPT: |-
+          Resolve the merge conflicts created while syncing this pull request branch with its base branch.
+
+          Original request: ${{ steps.context.outputs.user_prompt }}
+        PR_NUMBER: ${{ steps.context.outputs.pr_number }}
+        TRIGGER_URL: ${{ steps.context.outputs.trigger_url }}
+        PROMPT_FILE: ${{ inputs.prompt_file }}
+        PROMPT_FILE_REF: ${{ steps.context.outputs.base_ref }}
+      run: node "${{ github.action_path }}/dist/prompt.js"
 
     - name: Run Codex
-      if: steps.context.outputs.can_run == 'true'
+      if: steps.context.outputs.can_run == 'true' && steps.context.outputs.mode != 'sync_pr'
       id: run-codex
       continue-on-error: true
       uses: openai/codex-action@v1
@@ -234,12 +314,40 @@ runs:
         codex-version: ${{ inputs.codex-version }}
         codex-args: ${{ inputs.codex-args }}
 
+    - name: Run Codex for sync conflicts
+      if: steps.sync.outputs.conflicted == 'true'
+      id: run-sync-codex
+      continue-on-error: true
+      uses: openai/codex-action@v1
+      env:
+        OPENAI_API_KEY: ""
+        CLOUDFLARE_API_KEY: ""
+        CLOUDFLARE_API_TOKEN: ""
+        CF_API_KEY: ""
+        CF_API_TOKEN: ""
+        CLOUDFLARE_ACCOUNT_ID: ""
+        CLOUDFLARE_AI_GATEWAY_ID: ""
+        OPENCODE_API_KEY: ""
+      with:
+        openai-api-key: ${{ steps.sync-provider.outputs.provider == 'cloudflare' && (inputs.cloudflare-api-key || env.CLOUDFLARE_API_KEY) || steps.sync-provider.outputs.provider == 'opencode' && (inputs.opencode-api-key || env.OPENCODE_API_KEY) || (inputs.openai-api-key || env.OPENAI_API_KEY) }}
+        responses-api-endpoint: ${{ steps.sync-cloudflare-proxy.outputs.responses_api_endpoint || steps.sync-provider.outputs.responses_api_endpoint }}
+        model: ${{ inputs.model }}
+        effort: ${{ inputs.effort }}
+        prompt-file: ${{ steps.sync-prompt.outputs.prompt_file }}
+        output-file: .slash-codex-output.md
+        sandbox: workspace-write
+        safety-strategy: ${{ inputs.safety-strategy }}
+        codex-version: ${{ inputs.codex-version }}
+        codex-args: ${{ inputs.codex-args }}
+
     - name: Capture Codex changes
-      if: steps.context.outputs.can_run == 'true' && (steps.context.outputs.can_modify == 'true' || steps.context.outputs.can_create_pr == 'true') && steps.run-codex.outcome == 'success'
+      if: steps.context.outputs.can_run == 'true' && ((steps.context.outputs.mode != 'sync_pr' && (steps.context.outputs.can_modify == 'true' || steps.context.outputs.can_create_pr == 'true') && steps.run-codex.outcome == 'success') || (steps.sync.outputs.conflicted == 'true' && steps.run-sync-codex.outcome == 'success'))
       id: patch
       shell: bash
       env:
         BLOCKED_PATHS: ${{ inputs.blocked-paths }}
+        CONFLICTED_PATHS: ${{ steps.sync.outputs.conflicted_paths }}
+        MERGE_STAGED_ENTRIES: ${{ steps.sync.outputs.merge_staged_entries }}
       run: node "${{ github.action_path }}/dist/capture.js"
 
     - name: Publish Codex changes
@@ -250,17 +358,22 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
         CAN_MODIFY: ${{ steps.context.outputs.can_modify }}
         CAN_CREATE_PR: ${{ steps.context.outputs.can_create_pr }}
+        ACTION_MODE: ${{ steps.sync.outputs.conflicted == 'true' && 'update_pr' || steps.context.outputs.mode }}
+        SYNC_CONFLICTED: ${{ steps.sync.outputs.conflicted }}
+        PR_NUMBER: ${{ steps.context.outputs.pr_number }}
         HEAD_REF: ${{ steps.context.outputs.head_ref }}
+        HEAD_SHA: ${{ steps.context.outputs.head_sha }}
         BASE_REF: ${{ steps.context.outputs.base_ref || steps.prompt.outputs.base_ref }}
+        BASE_SHA: ${{ steps.sync.outputs.base_sha || steps.context.outputs.base_sha || steps.prepare_refs.outputs.base_sha }}
         TARGET_ISSUE_NUMBER: ${{ steps.context.outputs.target_issue_number }}
         COMMIT_MESSAGE: ${{ inputs.commit-message }}
         BRANCH_PREFIX: ${{ inputs.branch-prefix }}
         USER_PROMPT: ${{ steps.context.outputs.user_prompt }}
-        CODEX_FINAL_MESSAGE: ${{ steps.run-codex.outputs.final-message }}
+        CODEX_FINAL_MESSAGE: ${{ steps.sync.outputs.conflicted == 'true' && steps.run-sync-codex.outputs.final-message || steps.run-codex.outputs.final-message }}
       run: node "${{ github.action_path }}/dist/publish.js"
 
     - name: React to failure
-      if: always() && steps.context.outputs.can_run == 'true' && (steps.run-codex.outcome != 'success' || steps.patch.outputs.blocked == 'true' || steps.publish.outcome == 'failure')
+      if: always() && steps.context.outputs.can_run == 'true' && (failure() || steps.run-codex.outcome == 'failure' || steps.run-sync-codex.outcome == 'failure' || steps.patch.outputs.blocked == 'true')
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
@@ -270,23 +383,46 @@ runs:
       run: node "${{ github.action_path }}/dist/react.js"
 
     - name: Post Codex feedback
-      if: always() && steps.context.outputs.can_run == 'true' && (steps.run-codex.outputs.final-message != '' || steps.run-codex.outcome != 'success' || steps.patch.outputs.changed == 'true' || steps.patch.outputs.blocked == 'true')
+      if: always() && steps.context.outputs.can_run == 'true'
+      id: feedback
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
-        CODEX_FINAL_MESSAGE: ${{ steps.run-codex.outputs.final-message }}
-        CODEX_OUTCOME: ${{ steps.run-codex.outcome }}
+        WORKFLOW_FAILED: ${{ failure() }}
+        CODEX_FINAL_MESSAGE: ${{ steps.sync.outputs.conflicted == 'true' && steps.run-sync-codex.outputs.final-message || steps.run-codex.outputs.final-message }}
+        CODEX_OUTCOME: ${{ steps.sync.outputs.conflicted == 'true' && steps.run-sync-codex.outcome || steps.run-codex.outcome }}
+        PREPARE_REFS_OUTCOME: ${{ steps.prepare_refs.outcome }}
+        PROVIDER_OUTCOME: ${{ steps.provider.outcome }}
+        SYNC_PROVIDER_OUTCOME: ${{ steps.sync-provider.outcome }}
+        PROMPT_OUTCOME: ${{ steps.prompt.outcome }}
+        SYNC_PROMPT_OUTCOME: ${{ steps.sync-prompt.outcome }}
+        PATCH_OUTCOME: ${{ steps.patch.outcome }}
         PATCH_CHANGED: ${{ steps.patch.outputs.changed }}
         PATCH_BLOCKED: ${{ steps.patch.outputs.blocked }}
         PATCH_BLOCKED_PATHS: ${{ steps.patch.outputs.blocked_paths }}
         PUBLISH_CHANGED: ${{ steps.publish.outputs.changed }}
         CREATED_PR_URL: ${{ steps.publish.outputs.pr_url }}
         PUBLISH_OUTCOME: ${{ steps.publish.outcome }}
+        ACTION_MODE: ${{ steps.context.outputs.mode }}
+        SYNC_CHANGED: ${{ steps.sync.outputs.changed }}
+        SYNC_CONFLICTED: ${{ steps.sync.outputs.conflicted }}
+        SYNC_STRATEGY: ${{ steps.sync.outputs.strategy }}
+        SYNC_OUTCOME: ${{ steps.sync.outcome }}
         REVIEW_COMMENT_ID: ${{ steps.context.outputs.review_comment_id }}
         TARGET_ISSUE_NUMBER: ${{ steps.context.outputs.target_issue_number }}
       run: node "${{ github.action_path }}/dist/feedback.js"
 
+    - name: React to feedback failure
+      if: always() && steps.context.outputs.can_run == 'true' && steps.feedback.outcome == 'failure'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+        REACTION_SUBJECT_ID: ${{ steps.context.outputs.reaction_subject_id }}
+        REMOVE_REACTION_CONTENT: THUMBS_UP
+        ADD_REACTION_CONTENT: THUMBS_DOWN
+      run: node "${{ github.action_path }}/dist/react.js"
+
     - name: Fail failed Codex run
-      if: always() && steps.context.outputs.can_run == 'true' && (steps.run-codex.outcome != 'success' || steps.patch.outputs.blocked == 'true' || steps.publish.outcome == 'failure')
+      if: always() && steps.context.outputs.can_run == 'true' && (failure() || steps.run-codex.outcome == 'failure' || steps.run-sync-codex.outcome == 'failure' || steps.patch.outputs.blocked == 'true')
       shell: bash
       run: exit 1

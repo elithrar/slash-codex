@@ -4022,11 +4022,11 @@ var require_util2 = __commonJS({
     var { isUint8Array } = __require("node:util/types");
     var { webidl } = require_webidl();
     var supportedHashes = [];
-    var crypto;
+    var crypto2;
     try {
-      crypto = __require("node:crypto");
+      crypto2 = __require("node:crypto");
       const possibleRelevantHashes = ["sha256", "sha384", "sha512"];
-      supportedHashes = crypto.getHashes().filter((hash) => possibleRelevantHashes.includes(hash));
+      supportedHashes = crypto2.getHashes().filter((hash) => possibleRelevantHashes.includes(hash));
     } catch {
     }
     function responseURL(response) {
@@ -4299,7 +4299,7 @@ var require_util2 = __commonJS({
       }
     }
     function bytesMatch(bytes, metadataList) {
-      if (crypto === void 0) {
+      if (crypto2 === void 0) {
         return true;
       }
       const parsedMetadata = parseMetadata(metadataList);
@@ -4314,7 +4314,7 @@ var require_util2 = __commonJS({
       for (const item of metadata) {
         const algorithm = item.algo;
         const expectedValue = item.hash;
-        let actualValue = crypto.createHash(algorithm).update(bytes).digest("base64");
+        let actualValue = crypto2.createHash(algorithm).update(bytes).digest("base64");
         if (actualValue[actualValue.length - 1] === "=") {
           if (actualValue[actualValue.length - 2] === "=") {
             actualValue = actualValue.slice(0, -2);
@@ -5378,8 +5378,8 @@ var require_body = __commonJS({
     var { multipartFormDataParser } = require_formdata_parser();
     var random;
     try {
-      const crypto = __require("node:crypto");
-      random = (max) => crypto.randomInt(0, max);
+      const crypto2 = __require("node:crypto");
+      random = (max) => crypto2.randomInt(0, max);
     } catch {
       random = (max) => Math.floor(Math.random(max));
     }
@@ -16880,13 +16880,13 @@ var require_frame = __commonJS({
     "use strict";
     var { maxUnsigned16Bit } = require_constants5();
     var BUFFER_SIZE = 16386;
-    var crypto;
+    var crypto2;
     var buffer = null;
     var bufIdx = BUFFER_SIZE;
     try {
-      crypto = __require("node:crypto");
+      crypto2 = __require("node:crypto");
     } catch {
-      crypto = {
+      crypto2 = {
         // not full compatibility, but minimum.
         randomFillSync: function randomFillSync(buffer2, _offset, _size) {
           for (let i = 0; i < buffer2.length; ++i) {
@@ -16899,7 +16899,7 @@ var require_frame = __commonJS({
     function generateMask() {
       if (bufIdx === BUFFER_SIZE) {
         bufIdx = 0;
-        crypto.randomFillSync(buffer ??= Buffer.allocUnsafe(BUFFER_SIZE), 0, BUFFER_SIZE);
+        crypto2.randomFillSync(buffer ??= Buffer.allocUnsafe(BUFFER_SIZE), 0, BUFFER_SIZE);
       }
       return [buffer[bufIdx++], buffer[bufIdx++], buffer[bufIdx++], buffer[bufIdx++]];
     }
@@ -16971,9 +16971,9 @@ var require_connection = __commonJS({
     var { Headers: Headers2, getHeadersList } = require_headers();
     var { getDecodeSplit } = require_util2();
     var { WebsocketFrameSend } = require_frame();
-    var crypto;
+    var crypto2;
     try {
-      crypto = __require("node:crypto");
+      crypto2 = __require("node:crypto");
     } catch {
     }
     function establishWebSocketConnection(url, protocols, client, ws, onEstablish, options) {
@@ -16993,7 +16993,7 @@ var require_connection = __commonJS({
         const headersList = getHeadersList(new Headers2(options.headers));
         request2.headersList = headersList;
       }
-      const keyValue = crypto.randomBytes(16).toString("base64");
+      const keyValue = crypto2.randomBytes(16).toString("base64");
       request2.headersList.append("sec-websocket-key", keyValue);
       request2.headersList.append("sec-websocket-version", "13");
       for (const protocol of protocols) {
@@ -17023,7 +17023,7 @@ var require_connection = __commonJS({
             return;
           }
           const secWSAccept = response.headersList.get("Sec-WebSocket-Accept");
-          const digest = crypto.createHash("sha1").update(keyValue + uid).digest("base64");
+          const digest = crypto2.createHash("sha1").update(keyValue + uid).digest("base64");
           if (secWSAccept !== digest) {
             failWebsocketConnection(ws, "Incorrect hash received in Sec-WebSocket-Accept header.");
             return;
@@ -19660,6 +19660,9 @@ var require_dist = __commonJS({
   }
 });
 
+// src/sync.ts
+import { execFileSync as execFileSync2 } from "node:child_process";
+
 // node_modules/@actions/core/lib/command.js
 import * as os from "os";
 
@@ -19731,6 +19734,37 @@ function escapeProperty(s) {
   return toCommandValue(s).replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A").replace(/:/g, "%3A").replace(/,/g, "%2C");
 }
 
+// node_modules/@actions/core/lib/file-command.js
+import * as crypto from "crypto";
+import * as fs from "fs";
+import * as os2 from "os";
+function issueFileCommand(command, message) {
+  const filePath = process.env[`GITHUB_${command}`];
+  if (!filePath) {
+    throw new Error(`Unable to find environment variable for file command ${command}`);
+  }
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Missing file at path: ${filePath}`);
+  }
+  fs.appendFileSync(filePath, `${toCommandValue(message)}${os2.EOL}`, {
+    encoding: "utf8"
+  });
+}
+function prepareKeyValueMessage(key, value) {
+  const delimiter = `ghadelimiter_${crypto.randomUUID()}`;
+  const convertedValue = toCommandValue(value);
+  if (key.includes(delimiter)) {
+    throw new Error(`Unexpected input: name should not contain the delimiter "${delimiter}"`);
+  }
+  if (convertedValue.includes(delimiter)) {
+    throw new Error(`Unexpected input: value should not contain the delimiter "${delimiter}"`);
+  }
+  return `${key}<<${delimiter}${os2.EOL}${convertedValue}${os2.EOL}${delimiter}`;
+}
+
+// node_modules/@actions/core/lib/core.js
+import * as os4 from "os";
+
 // node_modules/@actions/http-client/lib/index.js
 var tunnel = __toESM(require_tunnel2(), 1);
 var import_undici = __toESM(require_undici(), 1);
@@ -19787,7 +19821,7 @@ var HttpResponseRetryCodes = [
 ];
 
 // node_modules/@actions/core/lib/summary.js
-import { EOL as EOL2 } from "os";
+import { EOL as EOL3 } from "os";
 import { constants, promises } from "fs";
 var __awaiter = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
@@ -19931,7 +19965,7 @@ var Summary = class {
    * @returns {Summary} summary instance
    */
   addEOL() {
-    return this.addRaw(EOL2);
+    return this.addRaw(EOL3);
   }
   /**
    * Adds an HTML codeblock to the summary buffer
@@ -20071,20 +20105,20 @@ var Summary = class {
 var _summary = new Summary();
 
 // node_modules/@actions/core/lib/platform.js
-import os2 from "os";
+import os3 from "os";
 
 // node_modules/@actions/io/lib/io-util.js
-import * as fs from "fs";
-var { chmod, copyFile, lstat, mkdir, open, readdir, rename, rm, rmdir, stat, symlink, unlink } = fs.promises;
+import * as fs2 from "fs";
+var { chmod, copyFile, lstat, mkdir, open, readdir, rename, rm, rmdir, stat, symlink, unlink } = fs2.promises;
 var IS_WINDOWS = process.platform === "win32";
-var READONLY = fs.constants.O_RDONLY;
+var READONLY = fs2.constants.O_RDONLY;
 
 // node_modules/@actions/exec/lib/toolrunner.js
 var IS_WINDOWS2 = process.platform === "win32";
 
 // node_modules/@actions/core/lib/platform.js
-var platform = os2.platform();
-var arch = os2.arch();
+var platform = os3.platform();
+var arch = os3.arch();
 
 // node_modules/@actions/core/lib/core.js
 var ExitCode;
@@ -20092,6 +20126,14 @@ var ExitCode;
   ExitCode2[ExitCode2["Success"] = 0] = "Success";
   ExitCode2[ExitCode2["Failure"] = 1] = "Failure";
 })(ExitCode || (ExitCode = {}));
+function setOutput(name, value) {
+  const filePath = process.env["GITHUB_OUTPUT"] || "";
+  if (filePath) {
+    return issueFileCommand("OUTPUT", prepareKeyValueMessage(name, value));
+  }
+  process.stdout.write(os4.EOL);
+  issueCommand("set-output", { name }, toCommandValue(value));
+}
 function setFailed(message) {
   process.exitCode = ExitCode.Failure;
   error(message);
@@ -20099,9 +20141,46 @@ function setFailed(message) {
 function error(message, properties = {}) {
   issueCommand("error", toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
-function warning(message, properties = {}) {
-  issueCommand("warning", toCommandProperties(properties), message instanceof Error ? message.toString() : message);
-}
+
+// src/command.ts
+import { execFileSync } from "node:child_process";
+var run = (command, args, options = {}) => {
+  return execFileSync(command, args, {
+    cwd: options.cwd,
+    env: { ...process.env, ...options.env },
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  }).trim();
+};
+
+// src/git-auth.ts
+var requiredEnv = (name) => {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} is required`);
+  }
+  return value;
+};
+var authenticatedRemoteUrl = () => {
+  const token = requiredEnv("GITHUB_TOKEN");
+  const repository = requiredEnv("GITHUB_REPOSITORY");
+  const serverUrl = process.env.GITHUB_SERVER_URL || "https://github.com";
+  const host = serverUrl.replace(/^https?:\/\//, "");
+  return `https://x-access-token:${token}@${host}/${repository}.git`;
+};
+var configureGitUser = () => {
+  run("git", ["config", "user.name", "github-actions[bot]"]);
+  run("git", ["config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"]);
+};
+var withAuthenticatedRemote = (operation) => {
+  const originalUrl = run("git", ["remote", "get-url", "origin"]);
+  run("git", ["remote", "set-url", "origin", authenticatedRemoteUrl()]);
+  try {
+    return operation();
+  } finally {
+    run("git", ["remote", "set-url", "origin", originalUrl]);
+  }
+};
 
 // node_modules/@actions/github/lib/github.js
 var github_exports = {};
@@ -20111,8 +20190,8 @@ __export(github_exports, {
 });
 
 // node_modules/@actions/github/lib/context.js
-import { readFileSync, existsSync } from "fs";
-import { EOL as EOL3 } from "os";
+import { readFileSync, existsSync as existsSync2 } from "fs";
+import { EOL as EOL5 } from "os";
 var Context = class {
   /**
    * Hydrate the context from the environment
@@ -20121,11 +20200,11 @@ var Context = class {
     var _a, _b, _c;
     this.payload = {};
     if (process.env.GITHUB_EVENT_PATH) {
-      if (existsSync(process.env.GITHUB_EVENT_PATH)) {
+      if (existsSync2(process.env.GITHUB_EVENT_PATH)) {
         this.payload = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, { encoding: "utf8" }));
       } else {
         const path = process.env.GITHUB_EVENT_PATH;
-        process.stdout.write(`GITHUB_EVENT_PATH ${path} does not exist${EOL3}`);
+        process.stdout.write(`GITHUB_EVENT_PATH ${path} does not exist${EOL5}`);
       }
     }
     this.eventName = process.env.GITHUB_EVENT_NAME;
@@ -23869,166 +23948,180 @@ var repoContext = () => {
   return { owner, repo };
 };
 
-// src/feedback.ts
-var appendStatus = (body, message) => `${body}
-
----
-${message}`;
-var feedbackBody = () => {
-  const codexOutcome = process.env.CODEX_OUTCOME;
-  const patchChanged = process.env.PATCH_CHANGED === "true";
-  const patchBlocked = process.env.PATCH_BLOCKED === "true";
-  const publishChanged = process.env.PUBLISH_CHANGED === "true";
-  const publishOutcome = process.env.PUBLISH_OUTCOME;
-  const createdPrUrl = process.env.CREATED_PR_URL || "";
-  const actionMode = process.env.ACTION_MODE || "read_only";
-  const workflowFailed = process.env.WORKFLOW_FAILED === "true";
-  const prepareRefsOutcome = process.env.PREPARE_REFS_OUTCOME;
-  const providerOutcome = process.env.PROVIDER_OUTCOME;
-  const syncProviderOutcome = process.env.SYNC_PROVIDER_OUTCOME;
-  const promptOutcome = process.env.PROMPT_OUTCOME;
-  const syncPromptOutcome = process.env.SYNC_PROMPT_OUTCOME;
-  const patchOutcome = process.env.PATCH_OUTCOME;
-  const syncOutcome = process.env.SYNC_OUTCOME;
-  const syncChanged = process.env.SYNC_CHANGED === "true";
-  const syncConflicted = process.env.SYNC_CONFLICTED === "true";
-  const syncStrategy = process.env.SYNC_STRATEGY || "sync";
-  let body = process.env.CODEX_FINAL_MESSAGE || "Codex completed without a final message.";
-  if (actionMode === "sync_pr") {
-    if (prepareRefsOutcome === "failure") {
-      return `Codex could not prepare this PR branch for syncing.
-
-Check the workflow logs for details: ${github_exports.context.serverUrl}/${github_exports.context.repo.owner}/${github_exports.context.repo.repo}/actions/runs/${github_exports.context.runId}`;
-    }
-    if (syncOutcome && syncOutcome !== "success") {
-      return `Codex could not ${syncStrategy} this PR branch.
-
-Check the workflow logs for details: ${github_exports.context.serverUrl}/${github_exports.context.repo.owner}/${github_exports.context.repo.repo}/actions/runs/${github_exports.context.runId}`;
-    }
-    if (syncProviderOutcome === "failure" || syncPromptOutcome === "failure") {
-      return `Codex failed during sync conflict setup.
-
-Check the workflow logs for details: ${github_exports.context.serverUrl}/${github_exports.context.repo.owner}/${github_exports.context.repo.repo}/actions/runs/${github_exports.context.runId}`;
-    }
-    if (syncConflicted && codexOutcome && codexOutcome !== "success") {
-      return `Codex could not resolve the sync conflicts.
-
-Check the workflow logs for details: ${github_exports.context.serverUrl}/${github_exports.context.repo.owner}/${github_exports.context.repo.repo}/actions/runs/${github_exports.context.runId}`;
-    }
-    if (syncConflicted && publishChanged) {
-      return appendStatus(
-        body,
-        "Codex resolved the sync conflicts and pushed changes to this PR branch."
-      );
-    }
-    if (syncConflicted && patchChanged && publishOutcome === "failure") {
-      return appendStatus(
-        body,
-        "Codex resolved sync conflicts, but the workflow could not publish them. Check the workflow logs."
-      );
-    }
-    if (syncConflicted && patchOutcome === "failure") {
-      return appendStatus(
-        body,
-        "Codex responded, but the workflow could not capture the conflict-resolution changes. Check the workflow logs."
-      );
-    }
-    if (syncConflicted && patchBlocked) {
-      return appendStatus(
-        body,
-        `Codex changed blocked paths while resolving sync conflicts, so no changes were published.
-
-Blocked paths:
-${process.env.PATCH_BLOCKED_PATHS || ""}`
-      );
-    }
-    return syncChanged ? `Codex ${syncStrategy === "rebase" ? "rebased" : "merged the base branch into"} this PR branch.` : `This PR branch was already up to date; no ${syncStrategy} changes were needed.`;
-  }
-  if (prepareRefsOutcome === "failure") {
-    return `Codex could not prepare the pull request refs.
-
-Check the workflow logs for details: ${github_exports.context.serverUrl}/${github_exports.context.repo.owner}/${github_exports.context.repo.repo}/actions/runs/${github_exports.context.runId}`;
-  }
-  if (providerOutcome === "failure" || promptOutcome === "failure") {
-    return `Codex failed during workflow setup.
-
-Check the workflow logs for details: ${github_exports.context.serverUrl}/${github_exports.context.repo.owner}/${github_exports.context.repo.repo}/actions/runs/${github_exports.context.runId}`;
-  }
-  if (workflowFailed && (!codexOutcome || codexOutcome === "skipped")) {
-    return `Codex failed before producing a response.
-
-Check the workflow logs for details: ${github_exports.context.serverUrl}/${github_exports.context.repo.owner}/${github_exports.context.repo.repo}/actions/runs/${github_exports.context.runId}`;
-  }
-  if (codexOutcome && codexOutcome !== "success") {
-    return `Codex failed before producing a response.
-
-Check the workflow logs for details: ${github_exports.context.serverUrl}/${github_exports.context.repo.owner}/${github_exports.context.repo.repo}/actions/runs/${github_exports.context.runId}`;
-  }
-  if (patchOutcome === "failure") {
-    return appendStatus(
-      body,
-      "Codex generated a response, but the workflow could not capture file changes. Check the workflow logs."
-    );
-  }
-  if (patchBlocked) {
-    return appendStatus(
-      body,
-      `Codex changed blocked paths, so no patch or PR was published.
-
-Blocked paths:
-${process.env.PATCH_BLOCKED_PATHS || ""}
-
-A maintainer should review these changes manually before applying them.`
-    );
-  }
-  if (patchChanged && publishOutcome === "failure") {
-    return appendStatus(
-      body,
-      "Codex generated changes, but the workflow could not publish them. Check the workflow logs."
-    );
-  }
-  if (createdPrUrl) {
-    return appendStatus(
-      body,
-      actionMode === "update_codex_pr" ? `Codex updated the existing pull request with these changes: ${createdPrUrl}` : `Codex opened a pull request with these changes: ${createdPrUrl}`
-    );
-  }
-  if (publishChanged) {
-    return appendStatus(body, "Codex pushed changes to this PR branch.");
-  }
-  if (patchChanged) {
-    return appendStatus(
-      body,
-      "Codex generated changes, but no pushed branch or PR URL was reported. Check the workflow logs."
-    );
-  }
-  const noChangeStatus = actionMode === "update_pr" ? "Codex did not capture file changes, so no commit was pushed." : actionMode === "update_codex_pr" ? "Codex did not capture file changes for the existing pull request." : actionMode === "create_pr" ? "Codex did not capture file changes, so no PR was opened." : "Codex ran in read-only mode, so no changes were published.";
-  return appendStatus(body, noChangeStatus);
+// src/outputs.ts
+var boolOutput = (name, value) => {
+  setOutput(name, value ? "true" : "false");
 };
-var main = async () => {
-  const issueNumber = Number(process.env.TARGET_ISSUE_NUMBER);
-  if (!issueNumber) {
-    warning("TARGET_ISSUE_NUMBER is missing; cannot post feedback");
-    return;
+var stringOutput = (name, value) => {
+  setOutput(name, value == null ? "" : String(value));
+};
+var multilineOutput = (name, values) => {
+  setOutput(name, values.join("\n"));
+};
+
+// src/context-core.ts
+var syncStrategyForPrompt = (prompt) => {
+  const normalized = prompt.toLowerCase();
+  if (/\b(?:do not|don't|dont|never|without|no)\s+(?:\w+\s+){0,3}(?:rebase|sync|merge)\b/.test(
+    normalized
+  ) || /\bno\s+need\s+to\s+(?:rebase|sync|merge)\b/.test(normalized)) {
+    return "";
   }
+  const prefix = "(?:please\\s+)?";
+  const target = "(?:this|the)\\s+(?:pr|pull request|branch)";
+  const base = "(?:base|main|master|default)";
+  if (new RegExp(
+    `^${prefix}rebase(?:\\s+${target})?(?:\\s+(?:against|onto|from)\\s+${base})?\\s*$`
+  ).test(normalized)) {
+    return "rebase";
+  }
+  if (new RegExp(
+    `^${prefix}(?:sync|update)\\s+${target}\\s+(?:with|against|from|onto)\\s+${base}\\s*$`
+  ).test(normalized) || new RegExp(`^${prefix}merge\\s+${base}\\s+into\\s+${target}\\s*$`).test(normalized)) {
+    return "merge";
+  }
+  return "";
+};
+
+// src/sync.ts
+var revParse = (ref) => run("git", ["rev-parse", ref]);
+var runRaw = (command, args) => {
+  return execFileSync2(command, args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+};
+var normalizeFinalNewline = (value) => value.replace(/\r?\n$/, "");
+var isStagedDeletion = (path) => {
+  try {
+    run("git", ["diff", "--cached", "--quiet", "--diff-filter=D", "--", path]);
+    return false;
+  } catch {
+    return true;
+  }
+};
+var unmergedPaths = () => {
+  const output = run("git", ["diff", "--name-only", "--diff-filter=U", "-z"]);
+  return output.split("\0").filter(Boolean);
+};
+var stagedPaths = () => {
+  const output = run("git", ["diff", "--cached", "--name-only", "-z"]);
+  return output.split("\0").filter(Boolean);
+};
+var stagedEntries = (paths) => {
+  return paths.map((path) => {
+    const entry = normalizeFinalNewline(runRaw("git", ["ls-files", "-s", "--", path]));
+    return entry || (isStagedDeletion(path) ? `D	${path}` : "");
+  }).filter(Boolean);
+};
+var hasMergeInProgress = () => {
+  try {
+    run("git", ["rev-parse", "--verify", "MERGE_HEAD"]);
+    return true;
+  } catch {
+    return false;
+  }
+};
+var validatePr = async (expectedBaseSha = "") => {
   const octokit = getOctokit2();
   const repo = repoContext();
-  const body = feedbackBody();
-  const reviewCommentId = process.env.REVIEW_COMMENT_ID;
-  if (reviewCommentId) {
-    await octokit.rest.pulls.createReplyForReviewComment({
-      ...repo,
-      pull_number: issueNumber,
-      comment_id: Number(reviewCommentId),
-      body
-    });
+  const prNumber = Number(requiredEnv("PR_NUMBER"));
+  const expectedHeadRef = requiredEnv("HEAD_REF");
+  const expectedHeadSha = requiredEnv("HEAD_SHA");
+  const expectedBaseRef = requiredEnv("BASE_REF");
+  const defaultBranch = github_exports.context.payload.repository?.default_branch || "";
+  const { data: pr } = await octokit.rest.pulls.get({
+    ...repo,
+    pull_number: prNumber
+  });
+  if (pr.state !== "open") {
+    throw new Error(`PR #${prNumber} is not open`);
+  }
+  if (pr.head.repo?.full_name !== `${repo.owner}/${repo.repo}`) {
+    throw new Error(`PR #${prNumber} is not a same-repository PR`);
+  }
+  if (pr.head.ref !== expectedHeadRef) {
+    throw new Error(`PR #${prNumber} head changed from ${expectedHeadRef} to ${pr.head.ref}`);
+  }
+  if (defaultBranch && pr.head.ref === defaultBranch) {
+    throw new Error(`Refusing to sync the default branch: ${defaultBranch}`);
+  }
+  if (pr.head.sha !== expectedHeadSha) {
+    throw new Error(`PR #${prNumber} head changed during the run`);
+  }
+  if (pr.base.ref !== expectedBaseRef) {
+    throw new Error(`PR #${prNumber} base changed from ${expectedBaseRef} to ${pr.base.ref}`);
+  }
+  if (expectedBaseSha && pr.base.sha !== expectedBaseSha) {
+    throw new Error(`PR #${prNumber} base ${expectedBaseRef} moved during the run`);
+  }
+  return pr;
+};
+var abortInProgressOperation = (strategy) => {
+  try {
+    run("git", [strategy, "--abort"]);
+  } catch {
+  }
+};
+var main = async () => {
+  const pr = await validatePr();
+  const headRef = requiredEnv("HEAD_REF");
+  const baseRef = requiredEnv("BASE_REF");
+  const expectedHeadSha = requiredEnv("HEAD_SHA");
+  const strategy = syncStrategyForPrompt(process.env.USER_PROMPT || "") || "merge";
+  stringOutput("strategy", strategy);
+  boolOutput("conflicted", false);
+  configureGitUser();
+  withAuthenticatedRemote(() => {
+    run("git", [
+      "fetch",
+      "--no-tags",
+      "origin",
+      `+refs/heads/${baseRef}:refs/remotes/origin/${baseRef}`
+    ]);
+    run("git", [
+      "fetch",
+      "--no-tags",
+      "origin",
+      `+refs/heads/${headRef}:refs/remotes/origin/${headRef}`
+    ]);
+  });
+  const fetchedBaseSha = revParse(`refs/remotes/origin/${baseRef}`);
+  stringOutput("base_sha", fetchedBaseSha);
+  const before = revParse("HEAD");
+  try {
+    if (strategy === "rebase") {
+      run("git", ["rebase", `refs/remotes/origin/${baseRef}`]);
+    } else {
+      run("git", ["merge", "--no-edit", `refs/remotes/origin/${baseRef}`]);
+    }
+  } catch (error2) {
+    if (strategy === "rebase") {
+      abortInProgressOperation("rebase");
+      throw error2;
+    }
+    const conflictedPaths = unmergedPaths();
+    if (!hasMergeInProgress() || conflictedPaths.length === 0) {
+      throw error2;
+    }
+    boolOutput("conflicted", true);
+    multilineOutput("conflicted_paths", conflictedPaths);
+    multilineOutput("merge_staged_entries", stagedEntries(stagedPaths()));
+    boolOutput("changed", false);
     return;
   }
-  await octokit.rest.issues.createComment({
-    ...repo,
-    issue_number: issueNumber,
-    body
+  const after = revParse("HEAD");
+  await validatePr(fetchedBaseSha);
+  if (after === before) {
+    boolOutput("changed", false);
+    return;
+  }
+  withAuthenticatedRemote(() => {
+    const lease = `--force-with-lease=refs/heads/${headRef}:${expectedHeadSha}`;
+    run("git", ["push", "origin", `HEAD:${headRef}`, lease]);
   });
+  boolOutput("changed", true);
+  stringOutput("pr_url", pr.html_url);
 };
 await main().catch((error2) => {
   setFailed(error2 instanceof Error ? error2.message : String(error2));

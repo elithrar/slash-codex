@@ -3827,8 +3827,8 @@ var require_webidl = __commonJS({
           });
         }
         for (const options of converters) {
-          const { key, defaultValue, required: required2, converter } = options;
-          if (required2 === true) {
+          const { key, defaultValue, required, converter } = options;
+          if (required === true) {
             if (!Object.hasOwn(dictionary, key)) {
               throw webidl.errors.exception({
                 header: prefix,
@@ -3841,7 +3841,7 @@ var require_webidl = __commonJS({
           if (hasDefault && value !== null) {
             value ??= defaultValue();
           }
-          if (required2 || hasDefault || value !== void 0) {
+          if (required || hasDefault || value !== void 0) {
             value = converter(value, prefix, `${argument}.${key}`);
             if (options.allowedValues && !options.allowedValues.includes(value)) {
               throw webidl.errors.exception({
@@ -19145,12 +19145,12 @@ var require_lib = __commonJS({
             throw new Error("Client has already been disposed.");
           }
           const parsedUrl = new URL(requestUrl);
-          let info = this._prepareRequest(verb, parsedUrl, headers);
+          let info2 = this._prepareRequest(verb, parsedUrl, headers);
           const maxTries = this._allowRetries && RetryableHttpVerbs.includes(verb) ? this._maxRetries + 1 : 1;
           let numTries = 0;
           let response;
           do {
-            response = yield this.requestRaw(info, data);
+            response = yield this.requestRaw(info2, data);
             if (response && response.message && response.message.statusCode === HttpCodes2.Unauthorized) {
               let authenticationHandler;
               for (const handler2 of this.handlers) {
@@ -19160,7 +19160,7 @@ var require_lib = __commonJS({
                 }
               }
               if (authenticationHandler) {
-                return authenticationHandler.handleAuthentication(this, info, data);
+                return authenticationHandler.handleAuthentication(this, info2, data);
               } else {
                 return response;
               }
@@ -19183,8 +19183,8 @@ var require_lib = __commonJS({
                   }
                 }
               }
-              info = this._prepareRequest(verb, parsedRedirectUrl, headers);
-              response = yield this.requestRaw(info, data);
+              info2 = this._prepareRequest(verb, parsedRedirectUrl, headers);
+              response = yield this.requestRaw(info2, data);
               redirectsRemaining--;
             }
             if (!response.message.statusCode || !HttpResponseRetryCodes2.includes(response.message.statusCode)) {
@@ -19213,7 +19213,7 @@ var require_lib = __commonJS({
        * @param info
        * @param data
        */
-      requestRaw(info, data) {
+      requestRaw(info2, data) {
         return __awaiter3(this, void 0, void 0, function* () {
           return new Promise((resolve, reject) => {
             function callbackForResult(err, res) {
@@ -19225,7 +19225,7 @@ var require_lib = __commonJS({
                 resolve(res);
               }
             }
-            this.requestRawWithCallback(info, data, callbackForResult);
+            this.requestRawWithCallback(info2, data, callbackForResult);
           });
         });
       }
@@ -19235,12 +19235,12 @@ var require_lib = __commonJS({
        * @param data
        * @param onResult
        */
-      requestRawWithCallback(info, data, onResult) {
+      requestRawWithCallback(info2, data, onResult) {
         if (typeof data === "string") {
-          if (!info.options.headers) {
-            info.options.headers = {};
+          if (!info2.options.headers) {
+            info2.options.headers = {};
           }
-          info.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
+          info2.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
         }
         let callbackCalled = false;
         function handleResult(err, res) {
@@ -19249,7 +19249,7 @@ var require_lib = __commonJS({
             onResult(err, res);
           }
         }
-        const req = info.httpModule.request(info.options, (msg) => {
+        const req = info2.httpModule.request(info2.options, (msg) => {
           const res = new HttpClientResponse(msg);
           handleResult(void 0, res);
         });
@@ -19261,7 +19261,7 @@ var require_lib = __commonJS({
           if (socket) {
             socket.end();
           }
-          handleResult(new Error(`Request timeout: ${info.options.path}`));
+          handleResult(new Error(`Request timeout: ${info2.options.path}`));
         });
         req.on("error", function(err) {
           handleResult(err);
@@ -19297,27 +19297,27 @@ var require_lib = __commonJS({
         return this._getProxyAgentDispatcher(parsedUrl, proxyUrl);
       }
       _prepareRequest(method, requestUrl, headers) {
-        const info = {};
-        info.parsedUrl = requestUrl;
-        const usingSsl = info.parsedUrl.protocol === "https:";
-        info.httpModule = usingSsl ? https : http;
+        const info2 = {};
+        info2.parsedUrl = requestUrl;
+        const usingSsl = info2.parsedUrl.protocol === "https:";
+        info2.httpModule = usingSsl ? https : http;
         const defaultPort = usingSsl ? 443 : 80;
-        info.options = {};
-        info.options.host = info.parsedUrl.hostname;
-        info.options.port = info.parsedUrl.port ? parseInt(info.parsedUrl.port) : defaultPort;
-        info.options.path = (info.parsedUrl.pathname || "") + (info.parsedUrl.search || "");
-        info.options.method = method;
-        info.options.headers = this._mergeHeaders(headers);
+        info2.options = {};
+        info2.options.host = info2.parsedUrl.hostname;
+        info2.options.port = info2.parsedUrl.port ? parseInt(info2.parsedUrl.port) : defaultPort;
+        info2.options.path = (info2.parsedUrl.pathname || "") + (info2.parsedUrl.search || "");
+        info2.options.method = method;
+        info2.options.headers = this._mergeHeaders(headers);
         if (this.userAgent != null) {
-          info.options.headers["user-agent"] = this.userAgent;
+          info2.options.headers["user-agent"] = this.userAgent;
         }
-        info.options.agent = this._getAgent(info.parsedUrl);
+        info2.options.agent = this._getAgent(info2.parsedUrl);
         if (this.handlers) {
           for (const handler2 of this.handlers) {
-            handler2.prepareRequest(info.options);
+            handler2.prepareRequest(info2.options);
           }
         }
-        return info;
+        return info2;
       }
       _mergeHeaders(headers) {
         if (this.requestOptions && this.requestOptions.headers) {
@@ -19659,6 +19659,9 @@ var require_dist = __commonJS({
     }
   }
 });
+
+// src/publish.ts
+import { rmSync } from "node:fs";
 
 // node_modules/@actions/core/lib/command.js
 import * as os from "os";
@@ -20138,6 +20141,9 @@ function setFailed(message) {
 function error(message, properties = {}) {
   issueCommand("error", toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
+function info(message) {
+  process.stdout.write(message + os4.EOL);
+}
 
 // src/command.ts
 import { execFileSync } from "node:child_process";
@@ -20148,6 +20154,35 @@ var run = (command, args, options = {}) => {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"]
   }).trim();
+};
+
+// src/git-auth.ts
+var requiredEnv = (name) => {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} is required`);
+  }
+  return value;
+};
+var authenticatedRemoteUrl = () => {
+  const token = requiredEnv("GITHUB_TOKEN");
+  const repository = requiredEnv("GITHUB_REPOSITORY");
+  const serverUrl = process.env.GITHUB_SERVER_URL || "https://github.com";
+  const host = serverUrl.replace(/^https?:\/\//, "");
+  return `https://x-access-token:${token}@${host}/${repository}.git`;
+};
+var configureGitUser = () => {
+  run("git", ["config", "user.name", "github-actions[bot]"]);
+  run("git", ["config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"]);
+};
+var withAuthenticatedRemote = (operation) => {
+  const originalUrl = run("git", ["remote", "get-url", "origin"]);
+  run("git", ["remote", "set-url", "origin", authenticatedRemoteUrl()]);
+  try {
+    return operation();
+  } finally {
+    run("git", ["remote", "set-url", "origin", originalUrl]);
+  }
 };
 
 // node_modules/@actions/github/lib/github.js
@@ -23924,6 +23959,10 @@ var stringOutput = (name, value) => {
   setOutput(name, value == null ? "" : String(value));
 };
 
+// src/context-core.ts
+var sanitizeBranchPrefix = (prefix) => (prefix || "codex").replace(/[^A-Za-z0-9._/-]/g, "-").replace(/^\/+|\/+$/g, "") || "codex";
+var issueBranchName = (prefix, issueNumber) => `${sanitizeBranchPrefix(prefix)}/issue-${issueNumber}`;
+
 // src/publish-core.ts
 var wrapperNoise = [
   /^i did not (open|create) a pr\b/i,
@@ -23943,27 +23982,6 @@ var buildPullRequestBody = ({
 };
 
 // src/publish.ts
-var required = (name) => {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} is required`);
-  }
-  return value;
-};
-var configureGit = () => {
-  const token = required("GITHUB_TOKEN");
-  const repository = required("GITHUB_REPOSITORY");
-  const serverUrl = process.env.GITHUB_SERVER_URL || "https://github.com";
-  const host = serverUrl.replace(/^https?:\/\//, "");
-  run("git", ["config", "user.name", "github-actions[bot]"]);
-  run("git", ["config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"]);
-  run("git", [
-    "remote",
-    "set-url",
-    "origin",
-    `https://x-access-token:${token}@${host}/${repository}.git`
-  ]);
-};
 var hasStagedChanges = () => {
   try {
     run("git", ["diff", "--cached", "--quiet", "--exit-code"]);
@@ -23972,24 +23990,241 @@ var hasStagedChanges = () => {
     return true;
   }
 };
+var hasMergeInProgress = () => {
+  try {
+    run("git", ["rev-parse", "--verify", "MERGE_HEAD"]);
+    return true;
+  } catch {
+    return false;
+  }
+};
+var assertHeadContains = (expectedHeadSha) => {
+  if (!expectedHeadSha) {
+    return;
+  }
+  run("git", ["merge-base", "--is-ancestor", expectedHeadSha, "HEAD"]);
+};
+var validateBranchName = (branch) => {
+  try {
+    run("git", ["check-ref-format", "--branch", branch]);
+  } catch {
+    throw new Error(`Invalid branch name: ${branch}`);
+  }
+};
+var remoteBranchExists = (branch) => {
+  const output = withAuthenticatedRemote(
+    () => run("git", ["ls-remote", "--heads", "origin", `refs/heads/${branch}`])
+  );
+  return output.split(/\r?\n/).some((line) => line.endsWith(`	refs/heads/${branch}`));
+};
+var pushHead = (branch, expectedHeadSha = "") => {
+  withAuthenticatedRemote(() => {
+    const lease = expectedHeadSha ? [`--force-with-lease=refs/heads/${branch}:${expectedHeadSha}`] : [];
+    run("git", ["push", "origin", `HEAD:${branch}`, ...lease]);
+  });
+};
+var remoteHeadSha = (branch) => {
+  withAuthenticatedRemote(() => {
+    run("git", [
+      "fetch",
+      "--no-tags",
+      "origin",
+      `+refs/heads/${branch}:refs/remotes/origin/${branch}`
+    ]);
+  });
+  return run("git", ["rev-parse", `refs/remotes/origin/${branch}`]);
+};
+var remoteAlreadyHasHead = (branch) => {
+  try {
+    return remoteHeadSha(branch) === run("git", ["rev-parse", "HEAD"]);
+  } catch {
+    return false;
+  }
+};
+var recoverStagedChangesOntoHead = (headRef, expectedHeadSha) => {
+  const patchPath = ".slash-codex-staged.patch";
+  run("git", ["diff", "--cached", "--binary", `--output=${patchPath}`]);
+  try {
+    run("git", ["reset", "--hard"]);
+    withAuthenticatedRemote(() => {
+      run("git", [
+        "fetch",
+        "--no-tags",
+        "origin",
+        `+refs/heads/${headRef}:refs/remotes/origin/${headRef}`
+      ]);
+    });
+    run("git", ["switch", "-C", headRef, `refs/remotes/origin/${headRef}`]);
+    const actualHeadSha = run("git", ["rev-parse", "HEAD"]);
+    if (actualHeadSha !== expectedHeadSha) {
+      throw new Error(`PR branch ${headRef} moved while recovering Codex changes`);
+    }
+    run("git", ["apply", "--index", patchPath]);
+  } finally {
+    rmSync(patchPath, { force: true });
+  }
+};
+var recoverCommittedChangesOntoHead = (headRef, commitMessage) => {
+  const parentLine = run("git", ["rev-list", "--parents", "-n", "1", "HEAD"]);
+  if (parentLine.trim().split(/\s+/).length > 2) {
+    throw new Error(
+      "PR branch changed after creating a merge commit; rerun Codex to resolve conflicts on the latest head"
+    );
+  }
+  const patchPath = ".slash-codex-commit.patch";
+  run("git", ["diff", "--binary", "HEAD~1", "HEAD", `--output=${patchPath}`]);
+  try {
+    withAuthenticatedRemote(() => {
+      run("git", [
+        "fetch",
+        "--no-tags",
+        "origin",
+        `+refs/heads/${headRef}:refs/remotes/origin/${headRef}`
+      ]);
+    });
+    run("git", ["switch", "-C", headRef, `refs/remotes/origin/${headRef}`]);
+    const expectedHeadSha = run("git", ["rev-parse", "HEAD"]);
+    run("git", ["apply", "--index", patchPath]);
+    run("git", ["commit", "-m", commitMessage]);
+    return expectedHeadSha;
+  } finally {
+    rmSync(patchPath, { force: true });
+  }
+};
+var validateWritablePr = async ({
+  prNumber,
+  headRef,
+  expectedHeadSha,
+  expectedBaseRef,
+  expectedBaseSha
+}) => {
+  const octokit = getOctokit2();
+  const repo = repoContext();
+  const { data: pr } = await octokit.rest.pulls.get({
+    ...repo,
+    pull_number: Number(prNumber)
+  });
+  const defaultBranch = github_exports.context.payload.repository?.default_branch || "";
+  if (pr.state !== "open") {
+    throw new Error(`PR #${prNumber} is not open`);
+  }
+  if (pr.head.repo?.full_name !== `${repo.owner}/${repo.repo}`) {
+    throw new Error(`PR #${prNumber} is not a same-repository PR`);
+  }
+  if (pr.head.ref !== headRef) {
+    throw new Error(`PR #${prNumber} head changed from ${headRef} to ${pr.head.ref}`);
+  }
+  if (defaultBranch && pr.head.ref === defaultBranch) {
+    throw new Error(`Refusing to push to the default branch: ${defaultBranch}`);
+  }
+  if (expectedHeadSha && pr.head.sha !== expectedHeadSha) {
+    info(`PR #${prNumber} head changed during the run; will reapply Codex changes`);
+  }
+  if (expectedBaseRef && pr.base.ref !== expectedBaseRef) {
+    throw new Error(`PR #${prNumber} base changed from ${expectedBaseRef} to ${pr.base.ref}`);
+  }
+  if (expectedBaseSha && pr.base.sha !== expectedBaseSha) {
+    throw new Error(`PR #${prNumber} base ${pr.base.ref} moved during the run`);
+  }
+  return pr;
+};
+var validateSyncConflictPr = async (headRef, expectedHeadSha) => {
+  const prNumber = requiredEnv("PR_NUMBER");
+  const pr = await validateWritablePr({
+    prNumber,
+    headRef,
+    expectedHeadSha,
+    expectedBaseRef: requiredEnv("BASE_REF"),
+    expectedBaseSha: requiredEnv("BASE_SHA")
+  });
+  if (pr.head.sha !== expectedHeadSha) {
+    throw new Error(
+      `PR #${prNumber} head changed while resolving sync conflicts; rerun Codex on the latest head`
+    );
+  }
+  return pr;
+};
+var validateUpdatePrTarget = async (headRef, expectedHeadSha) => {
+  return validateWritablePr({
+    prNumber: requiredEnv("PR_NUMBER"),
+    headRef,
+    expectedHeadSha,
+    expectedBaseRef: requiredEnv("BASE_REF")
+  });
+};
+var findIssuePullRequest = async (stableIssueRef, state) => {
+  const octokit = getOctokit2();
+  const repo = repoContext();
+  const escapedBranch = stableIssueRef.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const fallbackPattern = new RegExp(`^${escapedBranch}-\\d+-\\d+$`);
+  const prs = await octokit.paginate(octokit.rest.pulls.list, {
+    ...repo,
+    state,
+    per_page: 100
+  });
+  return prs.find(
+    (pr) => pr.head.repo?.full_name === `${repo.owner}/${repo.repo}` && (pr.head.ref === stableIssueRef || fallbackPattern.test(pr.head.ref))
+  );
+};
+var fallbackIssueBranch = (stableIssueRef) => `${stableIssueRef}-${github_exports.context.runId}-${github_exports.context.runAttempt}`;
 var main = async () => {
-  if (!hasStagedChanges()) {
+  if (!hasStagedChanges() && !hasMergeInProgress()) {
     boolOutput("changed", false);
     return;
   }
-  configureGit();
+  configureGitUser();
   const commitMessage = process.env.COMMIT_MESSAGE || "apply codex changes";
+  const mode = process.env.ACTION_MODE || "read_only";
+  const syncConflicted = process.env.SYNC_CONFLICTED === "true";
   let destinationRef = "";
   let issueNumber = "";
   let baseRef = "";
   let body = "";
-  if (process.env.CAN_MODIFY === "true") {
-    destinationRef = required("HEAD_REF");
-  } else if (process.env.CAN_CREATE_PR === "true") {
-    issueNumber = required("TARGET_ISSUE_NUMBER");
-    baseRef = required("BASE_REF");
-    const prefix = (process.env.BRANCH_PREFIX || "codex").replace(/[^A-Za-z0-9._/-]/g, "-");
-    destinationRef = `${prefix}/issue-${issueNumber}-${github_exports.context.runId}-${github_exports.context.runAttempt}`;
+  let updatedPrNumber = "";
+  let updatedPrUrl = "";
+  let expectedHeadSha = "";
+  let stableIssueRef = "";
+  if (mode === "update_pr" || mode === "update_codex_pr") {
+    const pr = await validateWritablePr({
+      prNumber: requiredEnv("PR_NUMBER"),
+      headRef: requiredEnv("HEAD_REF"),
+      expectedHeadSha: process.env.HEAD_SHA || "",
+      ...syncConflicted ? { expectedBaseRef: requiredEnv("BASE_REF") } : {}
+    });
+    destinationRef = pr.head.ref;
+    expectedHeadSha = pr.head.sha;
+    if (process.env.HEAD_SHA && pr.head.sha !== process.env.HEAD_SHA) {
+      if (syncConflicted || hasMergeInProgress()) {
+        throw new Error(
+          "PR branch changed while resolving sync conflicts; rerun Codex on the latest head"
+        );
+      }
+      recoverStagedChangesOntoHead(pr.head.ref, pr.head.sha);
+    }
+    if (mode === "update_codex_pr" || syncConflicted) {
+      updatedPrNumber = String(pr.number);
+      updatedPrUrl = pr.html_url;
+    }
+  } else if (mode === "create_pr") {
+    issueNumber = requiredEnv("TARGET_ISSUE_NUMBER");
+    baseRef = requiredEnv("BASE_REF");
+    stableIssueRef = issueBranchName(process.env.BRANCH_PREFIX || "codex", issueNumber);
+    destinationRef = stableIssueRef;
+    validateBranchName(stableIssueRef);
+    if (remoteBranchExists(stableIssueRef)) {
+      const existing = await findIssuePullRequest(stableIssueRef, "open");
+      if (existing) {
+        throw new Error(
+          `Issue #${issueNumber} already has open Codex PR #${existing.number}: ${existing.html_url}`
+        );
+      }
+      const closed = await findIssuePullRequest(stableIssueRef, "closed");
+      if (!closed) {
+        throw new Error(`Issue branch ${stableIssueRef} already exists; rerun Codex to update it`);
+      }
+      destinationRef = fallbackIssueBranch(stableIssueRef);
+      validateBranchName(destinationRef);
+    }
     body = buildPullRequestBody({
       issueNumber,
       request: process.env.USER_PROMPT || "",
@@ -24001,11 +24236,53 @@ var main = async () => {
     return;
   }
   run("git", ["commit", "-m", commitMessage]);
-  run("git", ["push", "origin", `HEAD:${destinationRef}`]);
+  assertHeadContains(expectedHeadSha);
+  if (mode === "update_pr" || mode === "update_codex_pr") {
+    if (syncConflicted) {
+      await validateSyncConflictPr(destinationRef, expectedHeadSha);
+    } else {
+      await validateUpdatePrTarget(destinationRef, expectedHeadSha);
+    }
+  }
+  try {
+    pushHead(destinationRef, expectedHeadSha);
+  } catch (error2) {
+    if (mode === "update_pr" || mode === "update_codex_pr") {
+      if (syncConflicted) {
+        await validateSyncConflictPr(destinationRef, expectedHeadSha);
+      } else {
+        await validateUpdatePrTarget(destinationRef, expectedHeadSha);
+      }
+    }
+    if (remoteAlreadyHasHead(destinationRef)) {
+      info(`Remote ${destinationRef} already contains the pushed commit`);
+    } else if ((mode === "update_pr" || mode === "update_codex_pr") && expectedHeadSha) {
+      const recoveredHeadSha = recoverCommittedChangesOntoHead(destinationRef, commitMessage);
+      pushHead(destinationRef, recoveredHeadSha);
+    } else if (mode === "create_pr" && destinationRef === stableIssueRef && remoteBranchExists(stableIssueRef)) {
+      const existing = await findIssuePullRequest(stableIssueRef, "open");
+      if (existing) {
+        throw new Error(
+          `Issue #${issueNumber} already has open Codex PR #${existing.number}: ${existing.html_url}`
+        );
+      }
+      throw new Error(`Issue branch ${stableIssueRef} was created during this run; rerun Codex`);
+    } else {
+      throw error2;
+    }
+  }
   boolOutput("changed", true);
-  if (issueNumber) {
+  if (updatedPrNumber) {
+    stringOutput("pr_url", updatedPrUrl);
+  } else if (issueNumber) {
     const octokit = getOctokit2();
     const repo = repoContext();
+    const existing = await findIssuePullRequest(stableIssueRef, "open");
+    if (existing) {
+      throw new Error(
+        `Issue #${issueNumber} already has open Codex PR #${existing.number}: ${existing.html_url}`
+      );
+    }
     const { data: pr } = await octokit.rest.pulls.create({
       ...repo,
       base: baseRef,
